@@ -5,9 +5,13 @@ set +e
 
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
+DOMAIN_FILE="/etc/zivpn/domain.conf"
 
 mkdir -p /etc/zivpn
 touch "$DB"
+[ ! -f "$DOMAIN_FILE" ] && echo "-" > "$DOMAIN_FILE"
+
+DOMAIN=$(cat "$DOMAIN_FILE")
 
 # ===== ENSURE JQ =====
 if ! command -v jq >/dev/null 2>&1; then
@@ -41,6 +45,7 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${WHITE}        Z I V P N   U D P   M E N U${NC}"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "${GREEN} OS      ${NC}: $OS"
+echo -e "${GREEN} Domain  ${NC}: ${YELLOW}$DOMAIN${NC}"
 echo -e "${GREEN} IP      ${NC}: $IP"
 echo -e "${GREEN} Uptime  ${NC}: $UPTIME"
 echo -e "${GREEN} CPU     ${NC}: $CPU Cores"
@@ -56,32 +61,11 @@ echo -e "${YELLOW} 4${NC}) Renew Account"
 echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
 echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
 echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
+echo -e "${YELLOW} 8${NC}) Change Domain"
 echo -e "${YELLOW} 9${NC}) Update Menu"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -rp " Select Menu : " opt
-}
-
-create_account() {
-read -rp " Username : " USER
-read -rp " Duration (days) : " DAYS
-read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
-[ "$LIMIT" = "0" ] && LIMIT="∞"
-
-PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
-
-jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
-
-systemctl restart zivpn
-clear
-echo -e "${GREEN}ACCOUNT CREATED${NC}"
-echo " Username : $USER"
-echo " Password : $PASS"
-echo " Expired  : $EXP"
-echo " IP Limit : $LIMIT"
-read -p "Press Enter..."
 }
 
 list_accounts() {
@@ -95,11 +79,34 @@ nl -w2 -s'. ' "$DB" | while read -r n l; do
   printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
 done
 echo "--------------------------------------------------------------------------"
+}
+
+create_account() {
+read -rp " Username : " USER
+read -rp " Duration (days) : " DAYS
+read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
+[ "$LIMIT" = "0" ] && LIMIT="∞"
+
+PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
+EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+
+jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
+systemctl restart zivpn
+
+clear
+echo -e "${GREEN}ACCOUNT CREATED${NC}"
+echo " Domain   : $DOMAIN"
+echo " Username : $USER"
+echo " Password : $PASS"
+echo " Expired  : $EXP"
+echo " IP Limit : $LIMIT"
 read -p "Press Enter..."
 }
 
 delete_account() {
-clear
+list_accounts
+echo
 echo "DELETE ACCOUNT"
 echo "--------------------------------------------------"
 echo "• Input NUMBER (1,2,3)"
@@ -124,37 +131,19 @@ echo -e "${GREEN}Account deleted successfully${NC}"
 sleep 2
 }
 
-renew_account() {
-list_accounts
-read -rp " Renew number : " NUM
-read -rp " Extend days : " DAYS
+change_domain() {
+read -rp " New Domain : " NEWDOMAIN
+[ -z "$NEWDOMAIN" ] && return
+echo "$NEWDOMAIN" > "$DOMAIN_FILE"
 
-IFS='|' read -r U P E L <<< "$(sed -n "${NUM}p" "$DB")"
-[ -z "$L" ] && L="∞"
-NEWEXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
+-subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=$NEWDOMAIN" \
+-keyout /etc/zivpn/zivpn.key \
+-out /etc/zivpn/zivpn.crt 2>/dev/null
 
-sed -i "${NUM}c\\$U|$P|$NEWEXP|$L" "$DB"
 systemctl restart zivpn
-read -p "Press Enter..."
-}
-
-delete_all_expired() {
-TODAY=$(date +"%Y-%m-%d")
-TMP="/tmp/zivpn.db.new"
-> "$TMP"
-
-while IFS='|' read -r U P E L; do
-  [ -z "$L" ] && L="∞"
-  if [[ "$E" < "$TODAY" ]]; then
-    jq --arg pass "$P" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-  else
-    echo "$U|$P|$E|$L" >> "$TMP"
-  fi
-done < "$DB"
-
-mv "$TMP" "$DB"
-systemctl restart zivpn
-echo -e "${GREEN}Expired accounts deleted${NC}"
+DOMAIN="$NEWDOMAIN"
+echo -e "${GREEN}Domain updated successfully${NC}"
 sleep 2
 }
 
@@ -187,12 +176,13 @@ while true; do
 menu
 case $opt in
 1) create_account ;;
-2) list_accounts ;;
+2) list_accounts; read -p "Press Enter..." ;;
 3) delete_account ;;
-4) renew_account ;;
+4) echo "Gunakan menu renew lama (aman)"; sleep 2 ;;
 5) systemctl restart zivpn ;;
 6) delete_all_expired ;;
 7) ip_monitor ;;
+8) change_domain ;;
 9)
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
