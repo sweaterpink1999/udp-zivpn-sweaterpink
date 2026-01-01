@@ -6,16 +6,15 @@ set +e
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
 DOMAIN_FILE="/etc/zivpn/domain.conf"
+TG_CONF="/etc/zivpn/telegram.conf"
 
 mkdir -p /etc/zivpn
 touch "$DB"
 [ ! -f "$DOMAIN_FILE" ] && echo "-" > "$DOMAIN_FILE"
+[ ! -f "$TG_CONF" ] && echo -e "BOT_TOKEN=\nCHAT_ID=" > "$TG_CONF"
 
+source "$TG_CONF"
 DOMAIN=$(cat "$DOMAIN_FILE")
-
-# ===== TELEGRAM CONFIG =====
-BOT_TOKEN="ISI_TOKEN_BOT_KAMU"
-CHAT_ID="ISI_CHAT_ID_KAMU"
 
 # ===== ENSURE JQ =====
 if ! command -v jq >/dev/null 2>&1; then
@@ -73,36 +72,69 @@ echo -e "${CYAN}═════════════════════�
 read -rp " Select Menu : " opt
 }
 
+# ===== TELEGRAM SETUP =====
+set_telegram() {
+clear
+echo "SET TELEGRAM BACKUP"
+echo "-----------------------"
+read -rp "Input BOT TOKEN : " BOT
+read -rp "Input CHAT ID   : " CID
+
+if [[ -z "$BOT" || -z "$CID" ]]; then
+  echo "Bot Token & Chat ID wajib diisi"
+  sleep 2
+  return
+fi
+
+cat > "$TG_CONF" <<EOF
+BOT_TOKEN="$BOT"
+CHAT_ID="$CID"
+EOF
+
+chmod 600 "$TG_CONF"
+source "$TG_CONF"
+
+echo "Telegram config saved"
+sleep 2
+}
+
 backup_zivpn() {
+source "$TG_CONF"
+if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
+  echo "Telegram belum dikonfigurasi"
+  sleep 2
+  return
+fi
+
 DATE=$(date +"%Y-%m-%d_%H-%M")
 TMP="/root/zivpn-backup-$DATE.tar.gz"
 
 tar -czf "$TMP" \
-  /etc/zivpn/config.json \
-  /etc/zivpn/users.db \
-  /etc/zivpn/domain.conf \
-  /etc/zivpn/zivpn.crt \
-  /etc/zivpn/zivpn.key 2>/dev/null
+  /etc/zivpn \
+  "$TG_CONF" 2>/dev/null
 
 curl -s -F document=@"$TMP" \
 "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID&caption=ZIVPN Backup $DATE"
 
 rm -f "$TMP"
-echo -e "${GREEN}Backup sent to Telegram${NC}"
+echo "Backup berhasil dikirim ke Telegram"
 sleep 2
 }
 
 restore_zivpn() {
-read -rp "Paste Telegram backup URL: " URL
+read -rp "Paste Telegram FILE URL : " URL
 [ -z "$URL" ] && return
 
 TMP="/root/zivpn-restore.tar.gz"
-wget -O "$TMP" "$URL" || return
+wget -O "$TMP" "$URL" || { echo "Download gagal"; sleep 2; return; }
+
 tar -xzf "$TMP" -C /
 rm -f "$TMP"
 
+[ -f "$TG_CONF" ] && source "$TG_CONF"
 systemctl restart zivpn
-echo -e "${GREEN}Restore completed successfully${NC}"
+
+echo "Restore berhasil"
 sleep 2
 }
 
@@ -123,11 +155,18 @@ chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
 ;;
 10)
-echo "1) Backup ke Telegram"
-echo "2) Restore dari Telegram"
+clear
+echo "BACKUP & RESTORE TELEGRAM"
+echo "---------------------------"
+echo "1) Set Bot Token & Chat ID"
+echo "2) Backup ke Telegram"
+echo "3) Restore dari Telegram"
 read -rp "Pilih : " BR
-[ "$BR" = "1" ] && backup_zivpn
-[ "$BR" = "2" ] && restore_zivpn
+case $BR in
+  1) set_telegram ;;
+  2) backup_zivpn ;;
+  3) restore_zivpn ;;
+esac
 ;;
 0) exit ;;
 esac
