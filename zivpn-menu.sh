@@ -6,14 +6,11 @@ set +e
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
 DOMAIN_FILE="/etc/zivpn/domain.conf"
-TG_CONF="/etc/zivpn/telegram.conf"
 
 mkdir -p /etc/zivpn
 touch "$DB"
 [ ! -f "$DOMAIN_FILE" ] && echo "-" > "$DOMAIN_FILE"
-[ ! -f "$TG_CONF" ] && echo -e "BOT_TOKEN=\nCHAT_ID=" > "$TG_CONF"
 
-source "$TG_CONF"
 DOMAIN=$(cat "$DOMAIN_FILE")
 
 # ===== ENSURE JQ =====
@@ -66,76 +63,113 @@ echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
 echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
 echo -e "${YELLOW} 8${NC}) Change Domain"
 echo -e "${YELLOW} 9${NC}) Update Menu"
-echo -e "${YELLOW}10${NC}) Backup & Restore (Telegram)"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -rp " Select Menu : " opt
 }
 
-# ===== TELEGRAM SETUP =====
-set_telegram() {
+list_accounts() {
 clear
-echo "SET TELEGRAM BACKUP"
-echo "-----------------------"
-read -rp "Input BOT TOKEN : " BOT
-read -rp "Input CHAT ID   : " CID
-
-if [[ -z "$BOT" || -z "$CID" ]]; then
-  echo "Bot Token & Chat ID wajib diisi"
-  sleep 2
-  return
-fi
-
-cat > "$TG_CONF" <<EOF
-BOT_TOKEN="$BOT"
-CHAT_ID="$CID"
-EOF
-
-chmod 600 "$TG_CONF"
-source "$TG_CONF"
-
-echo "Telegram config saved"
-sleep 2
+echo "--------------------------------------------------------------------------"
+printf "%-4s %-15s %-18s %-12s %-8s\n" "No" "Username" "Password" "Expired" "IP Limit"
+echo "--------------------------------------------------------------------------"
+nl -w2 -s'. ' "$DB" | while read -r n l; do
+  IFS='|' read -r U P E L <<< "$l"
+  [ -z "$L" ] && L="∞"
+  printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
+done
+echo "--------------------------------------------------------------------------"
 }
 
-backup_zivpn() {
-source "$TG_CONF"
-if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
-  echo "Telegram belum dikonfigurasi"
-  sleep 2
-  return
-fi
+create_account() {
+read -rp " Username : " USER
+read -rp " Duration (days) : " DAYS
+read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
+[ "$LIMIT" = "0" ] && LIMIT="∞"
 
-DATE=$(date +"%Y-%m-%d_%H-%M")
-TMP="/root/zivpn-backup-$DATE.tar.gz"
+PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
+EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
-tar -czf "$TMP" \
-  /etc/zivpn \
-  "$TG_CONF" 2>/dev/null
-
-curl -s -F document=@"$TMP" \
-"https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID&caption=ZIVPN Backup $DATE"
-
-rm -f "$TMP"
-echo "Backup berhasil dikirim ke Telegram"
-sleep 2
-}
-
-restore_zivpn() {
-read -rp "Paste Telegram FILE URL : " URL
-[ -z "$URL" ] && return
-
-TMP="/root/zivpn-restore.tar.gz"
-wget -O "$TMP" "$URL" || { echo "Download gagal"; sleep 2; return; }
-
-tar -xzf "$TMP" -C /
-rm -f "$TMP"
-
-[ -f "$TG_CONF" ] && source "$TG_CONF"
+jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
 
-echo "Restore berhasil"
+clear
+echo -e "${GREEN}ACCOUNT CREATED${NC}"
+echo " Domain   : $DOMAIN"
+echo " Username : $USER"
+echo " Password : $PASS"
+echo " Expired  : $EXP"
+echo " IP Limit : $LIMIT"
+read -p "Press Enter..."
+}
+
+delete_account() {
+list_accounts
+echo
+echo "DELETE ACCOUNT"
+echo "--------------------------------------------------"
+echo "• Input NUMBER (1,2,3)"
+echo "• Atau input PASSWORD langsung"
+echo "--------------------------------------------------"
+read -rp " Input : " INPUT
+
+if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
+  LINE=$(sed -n "${INPUT}p" "$DB")
+  [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
+  PASS=$(echo "$LINE" | cut -d'|' -f2)
+  sed -i "${INPUT}d" "$DB"
+else
+  PASS="$INPUT"
+  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
+  sed -i "\|$PASS|d" "$DB"
+fi
+
+jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+systemctl restart zivpn
+echo -e "${GREEN}Account deleted successfully${NC}"
 sleep 2
+}
+
+change_domain() {
+read -rp " New Domain : " NEWDOMAIN
+[ -z "$NEWDOMAIN" ] && return
+echo "$NEWDOMAIN" > "$DOMAIN_FILE"
+
+openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
+-subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=$NEWDOMAIN" \
+-keyout /etc/zivpn/zivpn.key \
+-out /etc/zivpn/zivpn.crt 2>/dev/null
+
+systemctl restart zivpn
+DOMAIN="$NEWDOMAIN"
+echo -e "${GREEN}Domain updated successfully${NC}"
+sleep 2
+}
+
+ip_monitor() {
+clear
+echo "USER USAGE MONITOR"
+echo "--------------------------------------------------"
+printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "IP Limit" "Active IP"
+echo "--------------------------------------------------"
+
+TOTAL=0
+ss -u -n state connected '( sport = :5667 )' | awk '{print $5}' | cut -d: -f1 | sort | uniq -c > /tmp/zivpn.ip
+
+while IFS='|' read -r U P E L; do
+  [ -z "$L" ] && L="∞"
+  ACTIVE=$(grep -w "$P" /tmp/zivpn.ip | awk '{print $1}')
+  [ -z "$ACTIVE" ] && ACTIVE=0
+  TOTAL=$((TOTAL+ACTIVE))
+  STATUS="OK"
+  [[ "$L" != "∞" && "$ACTIVE" -gt "$L" ]] && STATUS="⚠️"
+  printf "%-10s %-18s %-8s %-2s %s\n" "$U" "$P" "$L" "$ACTIVE" "$STATUS"
+done < "$DB"
+
+echo "--------------------------------------------------"
+echo "Total IP Active (Server): $TOTAL"
+read -p "Press Enter..."
 }
 
 while true; do
@@ -144,7 +178,7 @@ case $opt in
 1) create_account ;;
 2) list_accounts; read -p "Press Enter..." ;;
 3) delete_account ;;
-4) echo "Renew gunakan menu lama"; sleep 2 ;;
+4) echo "Gunakan menu renew lama (aman)"; sleep 2 ;;
 5) systemctl restart zivpn ;;
 6) delete_all_expired ;;
 7) ip_monitor ;;
@@ -153,20 +187,6 @@ case $opt in
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
-;;
-10)
-clear
-echo "BACKUP & RESTORE TELEGRAM"
-echo "---------------------------"
-echo "1) Set Bot Token & Chat ID"
-echo "2) Backup ke Telegram"
-echo "3) Restore dari Telegram"
-read -rp "Pilih : " BR
-case $BR in
-  1) set_telegram ;;
-  2) backup_zivpn ;;
-  3) restore_zivpn ;;
-esac
 ;;
 0) exit ;;
 esac
