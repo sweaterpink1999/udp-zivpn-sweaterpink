@@ -86,6 +86,7 @@ echo " Username : $USER"
 echo " Password : $PASS"
 echo " Expired  : $EXP"
 read -p "Press Enter..."
+return
 }
 
 delete_account() {
@@ -101,6 +102,7 @@ jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /t
 systemctl restart zivpn
 echo -e "${GREEN}Account deleted${NC}"
 sleep 2
+return
 }
 
 renew_account() {
@@ -119,13 +121,18 @@ systemctl restart zivpn
 echo -e "${GREEN}Account renewed${NC}"
 echo " New Password : $NEWPASS"
 read -p "Press Enter..."
+return
 }
 
 while true; do
 menu
 case $opt in
 1) create_account ;;
-2) clear; list_accounts; read -p "Press Enter..." ;;
+2)
+clear
+list_accounts
+read -p "Press Enter..."
+;;
 3) delete_account ;;
 4) renew_account ;;
 5) systemctl restart zivpn ;;
