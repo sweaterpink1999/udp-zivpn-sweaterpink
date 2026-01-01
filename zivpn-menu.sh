@@ -59,12 +59,8 @@ read -p " Duration (days)  : " DAYS
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
-# ambil semua password lama
-OLD=$(grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr -d '\n')
-
 # hitung jumlah password
-COUNT=$(echo "$OLD" | grep -o '"' | wc -l)
-COUNT=$((COUNT / 2))
+COUNT=$(jq '.auth.config | length' "$CONFIG")
 
 if [ "$COUNT" -ge 80 ]; then
   echo -e "${RED}Maximum 80 password reached!${NC}"
@@ -72,13 +68,9 @@ if [ "$COUNT" -ge 80 ]; then
   exec "$0"
 fi
 
-if [ -z "$OLD" ]; then
-  NEW="\"$PASS\""
-else
-  NEW="$OLD,\"$PASS\""
-fi
+# tambah password (TANPA MENIMPA)
+jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/zivpn.json && mv /tmp/zivpn.json "$CONFIG"
 
-sed -i -E "s/\"config\":\s*\[[^\]]*\]/\"config\": [$NEW]/" "$CONFIG"
 systemctl restart zivpn
 
 clear
@@ -96,23 +88,19 @@ read -p " Press Enter to return menu..."
 exec "$0"
 ;;
 
+
 2)
 clear
 echo -e "${WHITE}Active Password:${NC}"
 echo "----------------------------"
 
-PASS_LIST=$(grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr ',' '\n' | tr -d '"')
-
-if [ -z "$PASS_LIST" ]; then
-  echo "No active password"
-else
-  echo "$PASS_LIST"
-fi
+jq -r '.auth.config[]' "$CONFIG"
 
 echo "----------------------------"
 read -p " Press Enter to return menu..."
 exec "$0"
 ;;
+
 
 3)
 systemctl restart zivpn
