@@ -60,12 +60,23 @@ exec "$0"
 
 2)
 clear
-echo -e "${YELLOW}Active ZIVPN Passwords:${NC}"
-grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr ',' '\n' | tr -d '"'
-echo
-read -p "Press Enter..."
+echo -e "${WHITE}Active Passwords:${NC}"
+echo "--------------------------"
+
+# ambil semua password
+PASS_LIST=$(grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr ',' '\n' | tr -d '"')
+
+if [ -z "$PASS_LIST" ]; then
+  echo "No active password"
+else
+  echo "$PASS_LIST"
+fi
+
+echo "--------------------------"
+read -p " Press Enter to return menu..."
 exec "$0"
 ;;
+
 
 3)
 systemctl restart zivpn
