@@ -5,7 +5,6 @@ set +e
 
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
-PORT_RANGE="6000-19999"
 
 mkdir -p /etc/zivpn
 touch "$DB"
@@ -56,43 +55,24 @@ echo -e "${YELLOW} 3${NC}) Delete Account"
 echo -e "${YELLOW} 4${NC}) Renew Account"
 echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
 echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
+echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
 echo -e "${YELLOW} 9${NC}) Update Menu"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -rp " Select Menu : " opt
 }
 
-list_accounts() {
-clear
-echo "--------------------------------------------------------------------------"
-printf "%-4s %-15s %-18s %-12s %-8s\n" "No" "Username" "Password" "Expired" "IP Limit"
-echo "--------------------------------------------------------------------------"
-nl -w2 -s'. ' "$DB" | while read -r n line; do
-  U=$(cut -d'|' -f1 <<< "$line")
-  P=$(cut -d'|' -f2 <<< "$line")
-  E=$(cut -d'|' -f3 <<< "$line")
-  L=$(cut -d'|' -f4 <<< "$line")
-  [ -z "$L" ] && L="∞"
-  printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
-done
-echo "--------------------------------------------------------------------------"
-read -p "Press Enter..."
-}
-
 create_account() {
 read -rp " Username : " USER
 read -rp " Duration (days) : " DAYS
-read -rp " IP Limit (ex: 1/2/3, 0=unlimit) : " IPLIMIT
-
-[[ -z "$USER" || -z "$DAYS" ]] && return
-[[ "$IPLIMIT" == "0" ]] && IPLIMIT="∞"
+read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
+[ "$LIMIT" = "0" ] && LIMIT="∞"
 
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-echo "$USER|$PASS|$EXP|$IPLIMIT" >> "$DB"
-
+echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
 
 clear
@@ -100,14 +80,28 @@ echo -e "${GREEN}ACCOUNT CREATED${NC}"
 echo " Username : $USER"
 echo " Password : $PASS"
 echo " Expired  : $EXP"
-echo " IP Limit : $IPLIMIT"
+echo " IP Limit : $LIMIT"
+read -p "Press Enter..."
+}
+
+list_accounts() {
+clear
+echo "--------------------------------------------------------------------------"
+printf "%-4s %-15s %-18s %-12s %-8s\n" "No" "Username" "Password" "Expired" "IP Limit"
+echo "--------------------------------------------------------------------------"
+nl -w2 -s'. ' "$DB" | while read -r n l; do
+  IFS='|' read -r U P E L <<< "$l"
+  [ -z "$L" ] && L="∞"
+  printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
+done
+echo "--------------------------------------------------------------------------"
 read -p "Press Enter..."
 }
 
 delete_account() {
 list_accounts
 read -rp " Delete number : " NUM
-PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2) || return
+PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2)
 sed -i "${NUM}d" "$DB"
 jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 systemctl restart zivpn
@@ -117,22 +111,16 @@ renew_account() {
 list_accounts
 read -rp " Renew number : " NUM
 read -rp " Extend days : " DAYS
-
-USER=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f1)
-PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2)
-LIMIT=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f4)
-EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
-
-sed -i "${NUM}c\\$USER|$PASS|$EXP|$LIMIT" "$DB"
+IFS='|' read -r U P E L <<< "$(sed -n "${NUM}p" "$DB")"
+NEWEXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+sed -i "${NUM}c\\$U|$P|$NEWEXP|$L" "$DB"
 systemctl restart zivpn
-read -p "Press Enter..."
 }
 
 delete_all_expired() {
 TODAY=$(date +"%Y-%m-%d")
-TMP="/tmp/zivpn_new.db"
+TMP="/tmp/zivpn.db.new"
 > "$TMP"
-
 while IFS='|' read -r U P E L; do
   if [[ "$E" < "$TODAY" ]]; then
     jq --arg pass "$P" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
@@ -140,11 +128,32 @@ while IFS='|' read -r U P E L; do
     echo "$U|$P|$E|$L" >> "$TMP"
   fi
 done < "$DB"
-
 mv "$TMP" "$DB"
 systemctl restart zivpn
-echo -e "${GREEN}Expired accounts deleted${NC}"
-sleep 2
+}
+
+ip_monitor() {
+clear
+echo "USER USAGE MONITOR"
+echo "--------------------------------------------------"
+printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "IP Limit" "Active IP"
+echo "--------------------------------------------------"
+
+TOTAL=0
+ss -u -n state connected '( sport = :5667 )' | awk '{print $5}' | cut -d: -f1 | sort | uniq -c > /tmp/zivpn.ip
+
+while IFS='|' read -r U P E L; do
+  ACTIVE=$(grep -w "$P" /tmp/zivpn.ip | awk '{print $1}')
+  [ -z "$ACTIVE" ] && ACTIVE=0
+  TOTAL=$((TOTAL+ACTIVE))
+  STATUS="OK"
+  [[ "$L" != "∞" && "$ACTIVE" -gt "$L" ]] && STATUS="⚠️"
+  printf "%-10s %-18s %-8s %-2s %s\n" "$U" "$P" "$L" "$ACTIVE" "$STATUS"
+done < "$DB"
+
+echo "--------------------------------------------------"
+echo "Total IP Active (Server): $TOTAL"
+read -p "Press Enter..."
 }
 
 while true; do
@@ -156,12 +165,12 @@ case $opt in
 4) renew_account ;;
 5) systemctl restart zivpn ;;
 6) delete_all_expired ;;
+7) ip_monitor ;;
 9)
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
 ;;
 0) exit ;;
-*) sleep 1 ;;
 esac
 done
