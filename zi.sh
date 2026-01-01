@@ -7,9 +7,9 @@ echo "======================================"
 echo "        ZIVPN UDP INSTALLER"
 echo "======================================"
 
-echo "[1/8] Update system"
+echo "[1/8] Update system & dependencies"
 apt-get update -y && apt-get upgrade -y
-apt-get install -y curl wget iptables iptables-persistent ufw
+apt-get install -y curl wget jq iptables iptables-persistent dos2unix
 
 echo "[2/8] Detect architecture"
 ARCH=$(uname -m)
@@ -71,26 +71,29 @@ systemctl daemon-reload
 systemctl enable zivpn
 systemctl start zivpn
 
-echo "[7/8] Setup firewall & NAT (SAFE MODE)"
+echo "[7/8] Setup firewall & NAT (SSH SAFE)"
 IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
 
-# NAT rules (ZIVPN)
 iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
 iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
-
-# Forward rules
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
-# SAVE IPTABLES ONLY (NO AUTO UFW ENABLE → SSH AMAN)
 netfilter-persistent save
 
 echo "[8/8] Install menu"
 wget -O /usr/bin/zivpn-menu https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh
+dos2unix /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
+
+cat > /usr/bin/menu << 'EOF'
+#!/bin/bash
+exec bash /usr/bin/zivpn-menu
+EOF
+chmod +x /usr/bin/menu
 
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
 echo " SSH SAFE | REBOOT SAFE"
-echo " Menu command : zivpn-menu"
+echo " Type command : menu"
 echo "======================================"
