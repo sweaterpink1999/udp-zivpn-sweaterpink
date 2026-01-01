@@ -15,11 +15,11 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 
 echo
-echo "[1/9] Update system & dependencies"
+echo "[1/10] Update system & dependencies"
 apt-get update -y && apt-get upgrade -y
 apt-get install -y curl wget jq iptables iptables-persistent dos2unix
 
-echo "[2/9] Detect architecture"
+echo "[2/10] Detect architecture"
 ARCH=$(uname -m)
 
 if [[ "$ARCH" == "x86_64" ]]; then
@@ -31,11 +31,11 @@ else
   exit 1
 fi
 
-echo "[3/9] Download ZIVPN binary"
+echo "[3/10] Download ZIVPN binary"
 wget -O /usr/local/bin/zivpn "$BIN_URL"
 chmod +x /usr/local/bin/zivpn
 
-echo "[4/9] Setup config, domain & certificate"
+echo "[4/10] Setup config, domain & certificate"
 mkdir -p /etc/zivpn
 
 # simpan domain
@@ -54,17 +54,16 @@ cat > /etc/zivpn/config.json << EOF
 }
 EOF
 
-# SSL cert (rapi pakai domain)
 openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
 -subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=$DOMAIN" \
 -keyout /etc/zivpn/zivpn.key \
 -out /etc/zivpn/zivpn.crt 2>/dev/null
 
-echo "[5/9] Enable IP Forward (PERMANENT)"
+echo "[5/10] Enable IP Forward (PERMANENT)"
 echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-zivpn.conf
 sysctl -p /etc/sysctl.d/99-zivpn.conf
 
-echo "[6/9] Install systemd service"
+echo "[6/10] Install systemd service"
 cat > /etc/systemd/system/zivpn.service << EOF
 [Unit]
 Description=ZIVPN UDP Server
@@ -81,9 +80,9 @@ EOF
 
 systemctl daemon-reload
 systemctl enable zivpn
-systemctl start zivpn
+systemctl restart zivpn
 
-echo "[7/9] Setup firewall & NAT (SSH SAFE)"
+echo "[7/10] Setup firewall & NAT (SSH SAFE)"
 IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
 
 iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
@@ -93,19 +92,29 @@ iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
 netfilter-persistent save
 
-echo "[8/9] Install menu"
+echo "[8/10] Install menu"
 wget -O /usr/bin/zivpn-menu https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh
 dos2unix /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
 
 cat > /usr/bin/menu << 'EOF'
 #!/bin/bash
-exec bash /usr/bin/zivpn-menu
+exec /usr/bin/zivpn-menu
 EOF
 chmod +x /usr/bin/menu
 
-echo "[9/9] Install auto delete expired user (CRON)"
+echo "[9/10] Auto start menu on SSH login"
+cat > /etc/profile.d/zivpn-autostart.sh << 'EOF'
+#!/bin/bash
+if [[ -n "$SSH_CONNECTION" ]] && [[ -t 0 ]] && [[ -z "$ZIVPN_MENU_LOADED" ]]; then
+  export ZIVPN_MENU_LOADED=1
+  clear
+  exec /usr/bin/zivpn-menu
+fi
+EOF
+chmod +x /etc/profile.d/zivpn-autostart.sh
 
+echo "[10/10] Install auto delete expired user (CRON)"
 cat > /usr/bin/zivpn-expire.sh << 'EOF'
 #!/bin/bash
 CONFIG="/etc/zivpn/config.json"
@@ -132,5 +141,5 @@ echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
 echo " Domain : $DOMAIN"
 echo " SSH SAFE | REBOOT SAFE"
-echo " Menu command : menu"
+echo " Login SSH → AUTO MENU"
 echo "======================================"
