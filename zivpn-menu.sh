@@ -1,4 +1,5 @@
 #!/bin/bash
+set +e
 # ZIVPN Menu - COLOR UI (MULTI USER UP TO 80)
 # UI TIDAK DIUBAH
 
@@ -8,6 +9,12 @@ PORT_RANGE="6000-19999"
 
 mkdir -p /etc/zivpn
 touch "$DB"
+
+# ===== ENSURE JQ =====
+if ! command -v jq >/dev/null 2>&1; then
+  apt update -y >/dev/null 2>&1
+  apt install -y jq >/dev/null 2>&1
+fi
 
 # ===== COLORS =====
 RED='\033[0;31m'
@@ -26,7 +33,7 @@ RAM_USED=$(free -m | awk '/Mem:/ {print $3}')
 RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
-ZIVPN_STATUS=$(systemctl is-active zivpn)
+ZIVPN_STATUS=$(systemctl is-active zivpn 2>/dev/null)
 
 menu() {
 clear
@@ -49,30 +56,34 @@ echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
 echo -e "${YELLOW} 9${NC}) Update Menu"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
-read -p " Select Menu : " opt
+read -rp " Select Menu : " opt
 }
 
 list_accounts() {
+clear
 echo "-------------------------------------------------------------"
 printf "%-4s %-15s %-20s %-12s\n" "No" "Username" "Password" "Expired"
 echo "-------------------------------------------------------------"
-nl -w2 -s'. ' "$DB" | while read n line; do
+nl -w2 -s'. ' "$DB" | while read -r n line; do
   U=$(echo "$line" | cut -d'|' -f1)
   P=$(echo "$line" | cut -d'|' -f2)
   E=$(echo "$line" | cut -d'|' -f3)
   printf "%-4s %-15s %-20s %-12s\n" "$n" "$U" "$P" "$E"
 done
 echo "-------------------------------------------------------------"
+read -p "Press Enter..."
 }
 
 create_account() {
-read -p " Username : " USER
-read -p " Duration (days) : " DAYS
+read -rp " Username : " USER
+read -rp " Duration (days) : " DAYS
+
+[[ -z "$USER" || -z "$DAYS" ]] && return
 
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
-COUNT=$(jq '.auth.config | length' "$CONFIG")
+COUNT=$(jq '.auth.config | length' "$CONFIG" 2>/dev/null)
 [ "$COUNT" -ge 80 ] && echo -e "${RED}Max 80 accounts reached${NC}" && sleep 2 && return
 
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
@@ -86,62 +97,43 @@ echo " Username : $USER"
 echo " Password : $PASS"
 echo " Expired  : $EXP"
 read -p "Press Enter..."
-return
 }
 
 delete_account() {
-clear
 list_accounts
-read -p " Delete number : " NUM
-
-PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2)
-
+read -rp " Delete number : " NUM
+PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2) || return
 sed -i "${NUM}d" "$DB"
 jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-
 systemctl restart zivpn
-echo -e "${GREEN}Account deleted${NC}"
-sleep 2
-return
 }
 
 renew_account() {
-clear
 list_accounts
-read -p " Renew number : " NUM
-
+read -rp " Renew number : " NUM
 NEWPASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 USER=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f1)
 EXP=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f3)
-
 sed -i "${NUM}c\\$USER|$NEWPASS|$EXP" "$DB"
 jq --arg pass "$NEWPASS" ".auth.config[$((NUM-1))] = \$pass" "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-
 systemctl restart zivpn
-echo -e "${GREEN}Account renewed${NC}"
-echo " New Password : $NEWPASS"
 read -p "Press Enter..."
-return
 }
 
 while true; do
 menu
 case $opt in
 1) create_account ;;
-2)
-clear
-list_accounts
-read -p "Press Enter..."
-;;
+2) list_accounts ;;
 3) delete_account ;;
 4) renew_account ;;
 5) systemctl restart zivpn ;;
 9)
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
-exec /usr/bin/zivpn-menu
+exec bash /usr/bin/zivpn-menu
 ;;
 0) exit ;;
-*) echo "Invalid"; sleep 1 ;;
+*) sleep 1 ;;
 esac
 done
