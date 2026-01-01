@@ -1,41 +1,20 @@
 #!/bin/bash
-# ZIVPN Menu - PREMIUM UI (SELF INSTALL & UPDATE)
-
-### ===== PATH & URL =====
-MENU_PATH="/usr/bin/zivpn-menu"
-MENU_URL="https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh"
+# ZIVPN Menu - COLOR UI (NO DEPENDENCY, SAFE)
 
 CONFIG="/etc/zivpn/config.json"
 PORT_RANGE="6000-19999"
 
-### ===== SELF INSTALL MODE =====
-if [[ "$0" != "$MENU_PATH" ]]; then
-  echo "Installing ZIVPN Menu..."
-  cp "$0" "$MENU_PATH"
-  chmod +x "$MENU_PATH"
+# ===== COLORS =====
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
 
-  # auto run menu on SSH login
-  if ! grep -q "AUTO ZIVPN MENU" /root/.bashrc 2>/dev/null; then
-cat >> /root/.bashrc << 'EOF'
-
-# === AUTO ZIVPN MENU ===
-if [[ -n "$SSH_CONNECTION" ]]; then
-  if [[ -z "$TMUX" && -z "$SCREEN" ]]; then
-    clear
-    /usr/bin/zivpn-menu
-    exit
-  fi
-fi
-EOF
-  fi
-
-  echo "ZIVPN Menu installed."
-  echo "Logout & login again."
-  exit
-fi
-
-### ===== SYSTEM INFO =====
-OS=$(lsb_release -ds 2>/dev/null || grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')
+# ===== SYSTEM INFO =====
+OS=$(lsb_release -ds 2>/dev/null | tr -d '"')
 IP=$(curl -s ifconfig.me)
 UPTIME=$(uptime -p)
 CPU=$(nproc)
@@ -46,26 +25,27 @@ DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 ZIVPN_STATUS=$(systemctl is-active zivpn)
 
 clear
-figlet ZIVPN | lolcat
-echo " // ZIVPN UDP SERVER //"
-echo "--------------------------------------"
-echo " OS      : $OS"
-echo " IP      : $IP"
-echo " Uptime  : $UPTIME"
-echo " CPU     : $CPU Cores"
-echo " RAM     : $RAM_USED / $RAM_TOTAL MB"
-echo " Disk    : $DISK_USED / $DISK_TOTAL"
-echo " ZIVPN   : $ZIVPN_STATUS"
-echo "--------------------------------------"
-echo " 1) Create Account"
-echo " 2) Show Active Password"
-echo " 3) Restart ZIVPN"
-echo " 9) Update Menu"
-echo " 0) Exit"
-echo "--------------------------------------"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+echo -e "${WHITE}        Z I V P N   U D P   M E N U${NC}"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+echo -e "${GREEN} OS      ${NC}: $OS"
+echo -e "${GREEN} IP      ${NC}: $IP"
+echo -e "${GREEN} Uptime  ${NC}: $UPTIME"
+echo -e "${GREEN} CPU     ${NC}: $CPU Cores"
+echo -e "${GREEN} RAM     ${NC}: $RAM_USED / $RAM_TOTAL MB"
+echo -e "${GREEN} Disk    ${NC}: $DISK_USED / $DISK_TOTAL"
+echo -e "${GREEN} ZIVPN   ${NC}: ${YELLOW}$ZIVPN_STATUS${NC}"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+echo -e "${YELLOW} 1${NC}) Create Account"
+echo -e "${YELLOW} 2${NC}) Show Active Password"
+echo -e "${YELLOW} 3${NC}) Restart ZIVPN"
+echo -e "${YELLOW} 9${NC}) Update Menu"
+echo -e "${RED} 0${NC}) Exit"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -p " Select Menu : " opt
 
 case $opt in
+
 1)
 read -p " Username (bebas) : " USER
 read -p " Duration (days)  : " DAYS
@@ -73,44 +53,58 @@ read -p " Duration (days)  : " DAYS
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
+# ROTATE PASSWORD (SAFE)
 sed -i -E 's/"config":[[:space:]]*\[[^]]*\]/"config":["'"$PASS"'"]/' "$CONFIG"
 systemctl restart zivpn
 
 clear
-echo "===================================="
-echo "        ZIVPN UDP ACCOUNT"
-echo "===================================="
-echo " Server IP        : $IP"
-echo " Port Range       : $PORT_RANGE"
-echo " User             : $USER"
-echo " Password         : $PASS"
-echo " Expiration date  : $EXP"
-echo "===================================="
-read -p "Press Enter..."
-exec "$MENU_PATH"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+echo -e "${WHITE}        ZIVPN UDP ACCOUNT${NC}"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+echo -e " Server IP        : $IP"
+echo -e " Port Range       : $PORT_RANGE"
+echo -e " User             : $USER"
+echo -e " Password         : ${GREEN}$PASS${NC}"
+echo -e " Duration days    : $DAYS"
+echo -e " Expiration date  : $EXP"
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+read -p " Press Enter to return menu..."
+exec "$0"
 ;;
 
 2)
 clear
+echo -e "${WHITE}Active Password:${NC}"
 grep -oP '"config":\s*\[\s*"\K[^"]+' "$CONFIG"
-read -p "Press Enter..."
-exec "$MENU_PATH"
+echo
+read -p " Press Enter to return menu..."
+exec "$0"
 ;;
 
 3)
 systemctl restart zivpn
+echo -e "${GREEN}ZIVPN restarted${NC}"
 sleep 2
-exec "$MENU_PATH"
+exec "$0"
 ;;
 
 9)
-echo "Updating menu..."
-curl -fsSL "$MENU_URL" -o "$MENU_PATH"
-chmod +x "$MENU_PATH"
-exec "$MENU_PATH"
+echo -e "${YELLOW}Updating menu...${NC}"
+curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
+chmod +x /usr/bin/zivpn-menu
+echo -e "${GREEN}Menu updated!${NC}"
+sleep 2
+exec /usr/bin/zivpn-menu
 ;;
 
 0)
+clear
 exit
+;;
+
+*)
+echo -e "${RED}Invalid option!${NC}"
+sleep 1
+exec "$0"
 ;;
 esac
