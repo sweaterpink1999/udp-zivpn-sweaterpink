@@ -25,6 +25,7 @@ sudo wget -O ziun.sh https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn
 ```
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
+menu
 ```
 Client App available:
 
