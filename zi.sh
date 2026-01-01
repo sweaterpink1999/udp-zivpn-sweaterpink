@@ -60,3 +60,8 @@ ufw allow 6000:19999/udp
 ufw allow 5667/udp
 rm zi.* 1> /dev/null 2> /dev/null
 echo -e "ZIVPN UDP Installed"
+
+# Install ZIVPN Menu
+wget -O /usr/bin/zivpn-menu https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh
+chmod +x /usr/bin/zivpn-menu
+
