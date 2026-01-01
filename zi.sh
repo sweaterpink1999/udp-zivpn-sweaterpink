@@ -1,8 +1,6 @@
 #!/bin/bash
 # ZIVPN UDP Installer (REBOOT SAFE & SSH SAFE)
 
-set -e
-
 echo "======================================"
 echo "        ZIVPN UDP INSTALLER"
 echo "======================================"
@@ -79,6 +77,8 @@ iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
+iptables -A INPUT -p udp --dport 5667 -m connlimit --connlimit-above 3 -j DROP
+
 netfilter-persistent save
 
 echo "[8/8] Install menu"
@@ -91,6 +91,30 @@ cat > /usr/bin/menu << 'EOF'
 exec bash /usr/bin/zivpn-menu
 EOF
 chmod +x /usr/bin/menu
+
+echo "[9/9] Install auto delete expired user (CRON)"
+
+cat > /usr/bin/zivpn-expire.sh << 'EOF'
+#!/bin/bash
+CONFIG="/etc/zivpn/config.json"
+DB="/etc/zivpn/users.db"
+TODAY=$(date +"%Y-%m-%d")
+
+[ ! -f "$DB" ] && exit 0
+
+while IFS='|' read -r USER PASS EXP; do
+  if [[ "$EXP" < "$TODAY" ]]; then
+    sed -i "\|$USER|$PASS|$EXP|d" "$DB"
+    jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+  fi
+done < "$DB"
+
+systemctl restart zivpn
+EOF
+
+chmod +x /usr/bin/zivpn-expire.sh
+
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
