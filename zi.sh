@@ -1,5 +1,5 @@
 #!/bin/bash
-# ZIVPN UDP Installer (REBOOT SAFE & SSH SAFE)
+# ZIVPN UDP Installer (REBOOT SAFE, SSH SAFE, CTRL+C SAFE)
 set -e
 
 echo "======================================"
@@ -99,17 +99,17 @@ chmod +x /usr/bin/zivpn-menu
 
 cat > /usr/bin/menu << 'EOF'
 #!/bin/bash
-exec /usr/bin/zivpn-menu
+/usr/bin/zivpn-menu
 EOF
 chmod +x /usr/bin/menu
 
-echo "[9/10] Auto start menu on SSH login"
+echo "[9/10] Auto start menu on SSH login (CTRL+C SAFE)"
 cat > /etc/profile.d/zivpn-autostart.sh << 'EOF'
 #!/bin/bash
 if [[ -n "$SSH_CONNECTION" ]] && [[ -t 0 ]] && [[ -z "$ZIVPN_MENU_LOADED" ]]; then
   export ZIVPN_MENU_LOADED=1
   clear
-  exec /usr/bin/zivpn-menu
+  /usr/bin/zivpn-menu
 fi
 EOF
 chmod +x /etc/profile.d/zivpn-autostart.sh
@@ -140,6 +140,7 @@ echo
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
 echo " Domain : $DOMAIN"
-echo " SSH SAFE | REBOOT SAFE"
-echo " Login SSH → AUTO MENU"
+echo " SSH LOGIN → AUTO MENU"
+echo " CTRL + C → BACK TO SHELL"
+echo " Manual menu : menu"
 echo "======================================"
