@@ -1,5 +1,5 @@
 #!/bin/bash
-# ZIVPN UDP Module Installer (FINAL REBOOT SAFE)
+# ZIVPN UDP Installer (REBOOT SAFE & SSH SAFE)
 
 set -e
 
@@ -71,25 +71,18 @@ systemctl daemon-reload
 systemctl enable zivpn
 systemctl start zivpn
 
-echo "[7/8] Setup firewall & NAT (REBOOT SAFE)"
+echo "[7/8] Setup firewall & NAT (SAFE MODE)"
 IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
 
-# DNAT
+# NAT rules (ZIVPN)
 iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-
-# MASQUERADE (WAJIB)
 iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
 
-# FORWARD
+# Forward rules
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
-# Firewall
-ufw allow 6000:19999/udp
-ufw allow 5667/udp
-ufw --force enable
-
-# SAVE IPTABLES
+# SAVE IPTABLES ONLY (NO AUTO UFW ENABLE → SSH AMAN)
 netfilter-persistent save
 
 echo "[8/8] Install menu"
@@ -98,5 +91,6 @@ chmod +x /usr/bin/zivpn-menu
 
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
+echo " SSH SAFE | REBOOT SAFE"
 echo " Menu command : zivpn-menu"
 echo "======================================"
