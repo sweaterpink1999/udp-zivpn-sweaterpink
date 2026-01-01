@@ -1,5 +1,5 @@
 #!/bin/bash
-# ZIVPN Menu - Safe (Ori Compatible)
+# ZIVPN Menu - SAFE & ORI COMPATIBLE
 
 CONFIG="/etc/zivpn/config.json"
 PORT_RANGE="6000-19999"
@@ -25,18 +25,8 @@ read -p "Duration days  : " DAYS
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
-cat > $CONFIG << EOF
-{
-  "listen": ":5667",
-  "cert": "/etc/zivpn/zivpn.crt",
-  "key": "/etc/zivpn/zivpn.key",
-  "obfs": "zivpn",
-  "auth": {
-    "mode": "passwords",
-    "config": ["$PASS"]
-  }
-}
-EOF
+# === ROTATE PASSWORD SAJA (JANGAN REWRITE CONFIG) ===
+sed -i -E 's/"config":[[:space:]]*\[[^]]*\]/"config":["'"$PASS"'"]/' "$CONFIG"
 
 systemctl restart zivpn
 
@@ -56,7 +46,7 @@ echo "===================================="
 
 2)
 echo "Active password:"
-grep -oP '"config":\s*\[\s*"\K[^"]+' $CONFIG
+grep -oP '"config":\s*\[\s*"\K[^"]+' "$CONFIG"
 ;;
 
 3)
