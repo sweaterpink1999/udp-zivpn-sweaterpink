@@ -1,15 +1,25 @@
 #!/bin/bash
 # ZIVPN UDP Installer (REBOOT SAFE & SSH SAFE)
+set -e
 
 echo "======================================"
 echo "        ZIVPN UDP INSTALLER"
 echo "======================================"
+echo
 
-echo "[1/8] Update system & dependencies"
+# ===== INPUT DOMAIN =====
+read -rp "Input Domain (contoh: udp.domainkamu.com): " DOMAIN
+if [[ -z "$DOMAIN" ]]; then
+  echo "Domain tidak boleh kosong!"
+  exit 1
+fi
+
+echo
+echo "[1/9] Update system & dependencies"
 apt-get update -y && apt-get upgrade -y
 apt-get install -y curl wget jq iptables iptables-persistent dos2unix
 
-echo "[2/8] Detect architecture"
+echo "[2/9] Detect architecture"
 ARCH=$(uname -m)
 
 if [[ "$ARCH" == "x86_64" ]]; then
@@ -21,12 +31,15 @@ else
   exit 1
 fi
 
-echo "[3/8] Download ZIVPN binary"
+echo "[3/9] Download ZIVPN binary"
 wget -O /usr/local/bin/zivpn "$BIN_URL"
 chmod +x /usr/local/bin/zivpn
 
-echo "[4/8] Setup config & certificate"
+echo "[4/9] Setup config, domain & certificate"
 mkdir -p /etc/zivpn
+
+# simpan domain
+echo "$DOMAIN" > /etc/zivpn/domain.conf
 
 cat > /etc/zivpn/config.json << EOF
 {
@@ -41,16 +54,17 @@ cat > /etc/zivpn/config.json << EOF
 }
 EOF
 
+# SSL cert (rapi pakai domain)
 openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
--subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=zivpn" \
+-subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=$DOMAIN" \
 -keyout /etc/zivpn/zivpn.key \
 -out /etc/zivpn/zivpn.crt 2>/dev/null
 
-echo "[5/8] Enable IP Forward (PERMANENT)"
+echo "[5/9] Enable IP Forward (PERMANENT)"
 echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-zivpn.conf
 sysctl -p /etc/sysctl.d/99-zivpn.conf
 
-echo "[6/8] Install systemd service"
+echo "[6/9] Install systemd service"
 cat > /etc/systemd/system/zivpn.service << EOF
 [Unit]
 Description=ZIVPN UDP Server
@@ -69,7 +83,7 @@ systemctl daemon-reload
 systemctl enable zivpn
 systemctl start zivpn
 
-echo "[7/8] Setup firewall & NAT (SSH SAFE)"
+echo "[7/9] Setup firewall & NAT (SSH SAFE)"
 IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
 
 iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
@@ -79,7 +93,7 @@ iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
 netfilter-persistent save
 
-echo "[8/8] Install menu"
+echo "[8/9] Install menu"
 wget -O /usr/bin/zivpn-menu https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh
 dos2unix /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
@@ -100,9 +114,9 @@ TODAY=$(date +"%Y-%m-%d")
 
 [ ! -f "$DB" ] && exit 0
 
-while IFS='|' read -r USER PASS EXP; do
+while IFS='|' read -r USER PASS EXP LIMIT; do
   if [[ "$EXP" < "$TODAY" ]]; then
-    sed -i "\|$USER|$PASS|$EXP|d" "$DB"
+    sed -i "\|$USER|$PASS|$EXP|$LIMIT|d" "$DB"
     jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
   fi
 done < "$DB"
@@ -111,11 +125,12 @@ systemctl restart zivpn
 EOF
 
 chmod +x /usr/bin/zivpn-expire.sh
-
 (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
+echo
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
+echo " Domain : $DOMAIN"
 echo " SSH SAFE | REBOOT SAFE"
-echo " Type command : menu"
+echo " Menu command : menu"
 echo "======================================"
