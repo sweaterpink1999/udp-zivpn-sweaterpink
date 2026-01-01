@@ -13,6 +13,10 @@ touch "$DB"
 
 DOMAIN=$(cat "$DOMAIN_FILE")
 
+# ===== TELEGRAM CONFIG =====
+BOT_TOKEN="ISI_TOKEN_BOT_KAMU"
+CHAT_ID="ISI_CHAT_ID_KAMU"
+
 # ===== ENSURE JQ =====
 if ! command -v jq >/dev/null 2>&1; then
   apt update -y >/dev/null 2>&1
@@ -63,113 +67,43 @@ echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
 echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
 echo -e "${YELLOW} 8${NC}) Change Domain"
 echo -e "${YELLOW} 9${NC}) Update Menu"
+echo -e "${YELLOW}10${NC}) Backup & Restore (Telegram)"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -rp " Select Menu : " opt
 }
 
-list_accounts() {
-clear
-echo "--------------------------------------------------------------------------"
-printf "%-4s %-15s %-18s %-12s %-8s\n" "No" "Username" "Password" "Expired" "IP Limit"
-echo "--------------------------------------------------------------------------"
-nl -w2 -s'. ' "$DB" | while read -r n l; do
-  IFS='|' read -r U P E L <<< "$l"
-  [ -z "$L" ] && L="∞"
-  printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
-done
-echo "--------------------------------------------------------------------------"
-}
+backup_zivpn() {
+DATE=$(date +"%Y-%m-%d_%H-%M")
+TMP="/root/zivpn-backup-$DATE.tar.gz"
 
-create_account() {
-read -rp " Username : " USER
-read -rp " Duration (days) : " DAYS
-read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
-[ "$LIMIT" = "0" ] && LIMIT="∞"
+tar -czf "$TMP" \
+  /etc/zivpn/config.json \
+  /etc/zivpn/users.db \
+  /etc/zivpn/domain.conf \
+  /etc/zivpn/zivpn.crt \
+  /etc/zivpn/zivpn.key 2>/dev/null
 
-PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+curl -s -F document=@"$TMP" \
+"https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID&caption=ZIVPN Backup $DATE"
 
-jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
-systemctl restart zivpn
-
-clear
-echo -e "${GREEN}ACCOUNT CREATED${NC}"
-echo " Domain   : $DOMAIN"
-echo " Username : $USER"
-echo " Password : $PASS"
-echo " Expired  : $EXP"
-echo " IP Limit : $LIMIT"
-read -p "Press Enter..."
-}
-
-delete_account() {
-list_accounts
-echo
-echo "DELETE ACCOUNT"
-echo "--------------------------------------------------"
-echo "• Input NUMBER (1,2,3)"
-echo "• Atau input PASSWORD langsung"
-echo "--------------------------------------------------"
-read -rp " Input : " INPUT
-
-if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
-  LINE=$(sed -n "${INPUT}p" "$DB")
-  [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
-  PASS=$(echo "$LINE" | cut -d'|' -f2)
-  sed -i "${INPUT}d" "$DB"
-else
-  PASS="$INPUT"
-  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
-  sed -i "\|$PASS|d" "$DB"
-fi
-
-jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-systemctl restart zivpn
-echo -e "${GREEN}Account deleted successfully${NC}"
+rm -f "$TMP"
+echo -e "${GREEN}Backup sent to Telegram${NC}"
 sleep 2
 }
 
-change_domain() {
-read -rp " New Domain : " NEWDOMAIN
-[ -z "$NEWDOMAIN" ] && return
-echo "$NEWDOMAIN" > "$DOMAIN_FILE"
+restore_zivpn() {
+read -rp "Paste Telegram backup URL: " URL
+[ -z "$URL" ] && return
 
-openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
--subj "/C=ID/ST=VPN/L=ZIVPN/O=ZIVPN/OU=ZIVPN/CN=$NEWDOMAIN" \
--keyout /etc/zivpn/zivpn.key \
--out /etc/zivpn/zivpn.crt 2>/dev/null
+TMP="/root/zivpn-restore.tar.gz"
+wget -O "$TMP" "$URL" || return
+tar -xzf "$TMP" -C /
+rm -f "$TMP"
 
 systemctl restart zivpn
-DOMAIN="$NEWDOMAIN"
-echo -e "${GREEN}Domain updated successfully${NC}"
+echo -e "${GREEN}Restore completed successfully${NC}"
 sleep 2
-}
-
-ip_monitor() {
-clear
-echo "USER USAGE MONITOR"
-echo "--------------------------------------------------"
-printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "IP Limit" "Active IP"
-echo "--------------------------------------------------"
-
-TOTAL=0
-ss -u -n state connected '( sport = :5667 )' | awk '{print $5}' | cut -d: -f1 | sort | uniq -c > /tmp/zivpn.ip
-
-while IFS='|' read -r U P E L; do
-  [ -z "$L" ] && L="∞"
-  ACTIVE=$(grep -w "$P" /tmp/zivpn.ip | awk '{print $1}')
-  [ -z "$ACTIVE" ] && ACTIVE=0
-  TOTAL=$((TOTAL+ACTIVE))
-  STATUS="OK"
-  [[ "$L" != "∞" && "$ACTIVE" -gt "$L" ]] && STATUS="⚠️"
-  printf "%-10s %-18s %-8s %-2s %s\n" "$U" "$P" "$L" "$ACTIVE" "$STATUS"
-done < "$DB"
-
-echo "--------------------------------------------------"
-echo "Total IP Active (Server): $TOTAL"
-read -p "Press Enter..."
 }
 
 while true; do
@@ -178,7 +112,7 @@ case $opt in
 1) create_account ;;
 2) list_accounts; read -p "Press Enter..." ;;
 3) delete_account ;;
-4) echo "Gunakan menu renew lama (aman)"; sleep 2 ;;
+4) echo "Renew gunakan menu lama"; sleep 2 ;;
 5) systemctl restart zivpn ;;
 6) delete_all_expired ;;
 7) ip_monitor ;;
@@ -187,6 +121,13 @@ case $opt in
 curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
 chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
+;;
+10)
+echo "1) Backup ke Telegram"
+echo "2) Restore dari Telegram"
+read -rp "Pilih : " BR
+[ "$BR" = "1" ] && backup_zivpn
+[ "$BR" = "2" ] && restore_zivpn
 ;;
 0) exit ;;
 esac
