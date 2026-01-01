@@ -1,6 +1,5 @@
 #!/bin/bash
-# ZIVPN UDP Module Installer (FINAL & STABLE)
-# Based on original ZIVPN method (safe)
+# ZIVPN UDP Module Installer (FINAL REBOOT SAFE)
 
 set -e
 
@@ -8,10 +7,11 @@ echo "======================================"
 echo "        ZIVPN UDP INSTALLER"
 echo "======================================"
 
-echo "[1/7] Update system"
+echo "[1/8] Update system"
 apt-get update -y && apt-get upgrade -y
+apt-get install -y curl wget iptables iptables-persistent ufw
 
-echo "[2/7] Detect architecture"
+echo "[2/8] Detect architecture"
 ARCH=$(uname -m)
 
 if [[ "$ARCH" == "x86_64" ]]; then
@@ -23,11 +23,11 @@ else
   exit 1
 fi
 
-echo "[3/7] Download ZIVPN binary"
+echo "[3/8] Download ZIVPN binary"
 wget -O /usr/local/bin/zivpn "$BIN_URL"
 chmod +x /usr/local/bin/zivpn
 
-echo "[4/7] Setup config & certificate"
+echo "[4/8] Setup config & certificate"
 mkdir -p /etc/zivpn
 
 cat > /etc/zivpn/config.json << EOF
@@ -48,19 +48,17 @@ openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
 -keyout /etc/zivpn/zivpn.key \
 -out /etc/zivpn/zivpn.crt 2>/dev/null
 
-sysctl -w net.core.rmem_max=16777216 >/dev/null
-sysctl -w net.core.wmem_max=16777216 >/dev/null
+echo "[5/8] Enable IP Forward (PERMANENT)"
+echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-zivpn.conf
+sysctl -p /etc/sysctl.d/99-zivpn.conf
 
-echo "[5/7] Install systemd service"
+echo "[6/8] Install systemd service"
 cat > /etc/systemd/system/zivpn.service << EOF
 [Unit]
 Description=ZIVPN UDP Server
 After=network.target
 
 [Service]
-Type=simple
-User=root
-WorkingDirectory=/etc/zivpn
 ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
 Restart=always
 RestartSec=3
@@ -69,17 +67,32 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-echo "[6/7] Setup firewall"
-IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
-iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
-ufw allow 6000:19999/udp
-ufw allow 5667/udp
-
 systemctl daemon-reload
 systemctl enable zivpn
-systemctl restart zivpn
+systemctl start zivpn
 
-echo "[7/7] Install menu"
+echo "[7/8] Setup firewall & NAT (REBOOT SAFE)"
+IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
+
+# DNAT
+iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+
+# MASQUERADE (WAJIB)
+iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
+
+# FORWARD
+iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
+iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
+
+# Firewall
+ufw allow 6000:19999/udp
+ufw allow 5667/udp
+ufw --force enable
+
+# SAVE IPTABLES
+netfilter-persistent save
+
+echo "[8/8] Install menu"
 wget -O /usr/bin/zivpn-menu https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh
 chmod +x /usr/bin/zivpn-menu
 
