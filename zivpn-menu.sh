@@ -51,7 +51,7 @@ echo -e "${GREEN} Users   ${NC}: ${YELLOW}$USER_COUNT${NC}"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "${YELLOW} 1${NC}) Create Account"
 echo -e "${YELLOW} 2${NC}) List Accounts"
-echo -e "${YELLOW} 3${NC}) Delete Account"
+echo -e "${YELLOW} 3${NC}) Delete Account (Number / Password)"
 echo -e "${YELLOW} 4${NC}) Renew Account"
 echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
 echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
@@ -73,8 +73,8 @@ EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
-systemctl restart zivpn
 
+systemctl restart zivpn
 clear
 echo -e "${GREEN}ACCOUNT CREATED${NC}"
 echo " Username : $USER"
@@ -99,37 +99,63 @@ read -p "Press Enter..."
 }
 
 delete_account() {
-list_accounts
-read -rp " Delete number : " NUM
-PASS=$(sed -n "${NUM}p" "$DB" | cut -d'|' -f2)
-sed -i "${NUM}d" "$DB"
+clear
+echo "DELETE ACCOUNT"
+echo "--------------------------------------------------"
+echo "• Input NUMBER (1,2,3)"
+echo "• Atau input PASSWORD langsung"
+echo "--------------------------------------------------"
+read -rp " Input : " INPUT
+
+if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
+  LINE=$(sed -n "${INPUT}p" "$DB")
+  [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
+  PASS=$(echo "$LINE" | cut -d'|' -f2)
+  sed -i "${INPUT}d" "$DB"
+else
+  PASS="$INPUT"
+  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
+  sed -i "\|$PASS|d" "$DB"
+fi
+
 jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 systemctl restart zivpn
+echo -e "${GREEN}Account deleted successfully${NC}"
+sleep 2
 }
 
 renew_account() {
 list_accounts
 read -rp " Renew number : " NUM
 read -rp " Extend days : " DAYS
+
 IFS='|' read -r U P E L <<< "$(sed -n "${NUM}p" "$DB")"
+[ -z "$L" ] && L="∞"
 NEWEXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+
 sed -i "${NUM}c\\$U|$P|$NEWEXP|$L" "$DB"
 systemctl restart zivpn
+read -p "Press Enter..."
 }
 
 delete_all_expired() {
 TODAY=$(date +"%Y-%m-%d")
 TMP="/tmp/zivpn.db.new"
 > "$TMP"
+
 while IFS='|' read -r U P E L; do
+  [ -z "$L" ] && L="∞"
   if [[ "$E" < "$TODAY" ]]; then
     jq --arg pass "$P" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
   else
     echo "$U|$P|$E|$L" >> "$TMP"
   fi
 done < "$DB"
+
 mv "$TMP" "$DB"
 systemctl restart zivpn
+echo -e "${GREEN}Expired accounts deleted${NC}"
+sleep 2
 }
 
 ip_monitor() {
@@ -143,6 +169,7 @@ TOTAL=0
 ss -u -n state connected '( sport = :5667 )' | awk '{print $5}' | cut -d: -f1 | sort | uniq -c > /tmp/zivpn.ip
 
 while IFS='|' read -r U P E L; do
+  [ -z "$L" ] && L="∞"
   ACTIVE=$(grep -w "$P" /tmp/zivpn.ip | awk '{print $1}')
   [ -z "$ACTIVE" ] && ACTIVE=0
   TOTAL=$((TOTAL+ACTIVE))
