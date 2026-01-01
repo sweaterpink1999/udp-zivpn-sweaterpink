@@ -1,5 +1,6 @@
 #!/bin/bash
 # ZIVPN Menu - COLOR UI (NO DEPENDENCY, SAFE)
+# MULTI PASSWORD VERSION (UP TO 80 PASS)
 
 CONFIG="/etc/zivpn/config.json"
 PORT_RANGE="6000-19999"
@@ -23,6 +24,11 @@ RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 ZIVPN_STATUS=$(systemctl is-active zivpn)
+
+# ===== ENSURE CONFIG ARRAY =====
+if ! grep -q '"config": \[' "$CONFIG"; then
+  sed -i 's/"mode": "passwords"/"mode": "passwords",\n    "config": []/' "$CONFIG"
+fi
 
 clear
 echo -e "${CYAN}══════════════════════════════════════${NC}"
@@ -53,8 +59,26 @@ read -p " Duration (days)  : " DAYS
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
-# ROTATE PASSWORD (SAFE)
-sed -i -E 's/"config":[[:space:]]*\[[^]]*\]/"config":["'"$PASS"'"]/' "$CONFIG"
+# ambil semua password lama
+OLD=$(grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr -d '\n')
+
+# hitung jumlah password
+COUNT=$(echo "$OLD" | grep -o '"' | wc -l)
+COUNT=$((COUNT / 2))
+
+if [ "$COUNT" -ge 80 ]; then
+  echo -e "${RED}Maximum 80 password reached!${NC}"
+  sleep 2
+  exec "$0"
+fi
+
+if [ -z "$OLD" ]; then
+  NEW="\"$PASS\""
+else
+  NEW="$OLD,\"$PASS\""
+fi
+
+sed -i -E "s/\"config\":\s*\[[^\]]*\]/\"config\": [$NEW]/" "$CONFIG"
 systemctl restart zivpn
 
 clear
@@ -75,8 +99,17 @@ exec "$0"
 2)
 clear
 echo -e "${WHITE}Active Password:${NC}"
-grep -oP '"config":\s*\[\s*"\K[^"]+' "$CONFIG"
-echo
+echo "----------------------------"
+
+PASS_LIST=$(grep -oP '"config":\s*\[\K[^\]]*' "$CONFIG" | tr ',' '\n' | tr -d '"')
+
+if [ -z "$PASS_LIST" ]; then
+  echo "No active password"
+else
+  echo "$PASS_LIST"
+fi
+
+echo "----------------------------"
 read -p " Press Enter to return menu..."
 exec "$0"
 ;;
