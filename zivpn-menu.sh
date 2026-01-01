@@ -1,6 +1,6 @@
 #!/bin/bash
 set +e
-# ZIVPN Menu - COLOR UI (MULTI USER UP TO 80)
+# ZIVPN Menu - COLOR UI (MULTI USER)
 # READY FOR SELLING | NO AUTO BLOCK
 
 CONFIG="/etc/zivpn/config.json"
@@ -34,6 +34,7 @@ RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 ZIVPN_STATUS=$(systemctl is-active zivpn 2>/dev/null)
+USER_COUNT=$(grep -c '|' "$DB" 2>/dev/null)
 
 menu() {
 clear
@@ -47,6 +48,7 @@ echo -e "${GREEN} CPU     ${NC}: $CPU Cores"
 echo -e "${GREEN} RAM     ${NC}: $RAM_USED / $RAM_TOTAL MB"
 echo -e "${GREEN} Disk    ${NC}: $DISK_USED / $DISK_TOTAL"
 echo -e "${GREEN} ZIVPN   ${NC}: ${YELLOW}$ZIVPN_STATUS${NC}"
+echo -e "${GREEN} Users   ${NC}: ${YELLOW}$USER_COUNT${NC}"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 echo -e "${YELLOW} 1${NC}) Create Account"
 echo -e "${YELLOW} 2${NC}) List Accounts"
@@ -87,9 +89,6 @@ read -rp " IP Limit (ex: 1/2/3, 0=unlimit) : " IPLIMIT
 
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
-
-COUNT=$(jq '.auth.config | length' "$CONFIG" 2>/dev/null)
-[ "$COUNT" -ge 80 ] && echo -e "${RED}Max 80 accounts reached${NC}" && sleep 2 && return
 
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 echo "$USER|$PASS|$EXP|$IPLIMIT" >> "$DB"
