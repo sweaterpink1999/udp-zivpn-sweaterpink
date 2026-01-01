@@ -77,8 +77,6 @@ iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
 
-iptables -A INPUT -p udp --dport 5667 -m connlimit --connlimit-above 3 -j DROP
-
 netfilter-persistent save
 
 echo "[8/8] Install menu"
