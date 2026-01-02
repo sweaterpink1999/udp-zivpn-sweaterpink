@@ -384,21 +384,25 @@ backup_zivpn_drive() {
     /etc/zivpn/zivpn.key \
     >/dev/null 2>&1
 
-  # Upload ke Google Drive
+  # === UPLOAD GOOGLE DRIVE (UTAMA) ===
   rclone copy "$FILE" "$REMOTE"
 
-  # Upload ke Telegram
-  RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
+  # === UPLOAD TELEGRAM (OPSIONAL) ===
+  TG_RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
     -F chat_id="$CHAT_ID" \
     -F document=@"$FILE")
 
-  FILE_ID=$(echo "$RESPONSE" | jq -r '.result.document.file_id')
-  FILE_PATH=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" | jq -r '.result.file_path')
+  # === CEK HASIL TELEGRAM ===
+  OK=$(echo "$TG_RESPONSE" | jq -r '.ok')
 
-  # Kirim info File ID & Path
-  curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-    -d chat_id="$CHAT_ID" \
-    -d text="✅ Backup ZIVPN selesai
+  if [[ "$OK" == "true" ]]; then
+    FILE_ID=$(echo "$TG_RESPONSE" | jq -r '.result.document.file_id')
+
+    FILE_PATH=$(curl -s \
+      "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" \
+      | jq -r '.result.file_path')
+
+    MSG="✅ Backup ZIVPN selesai
 
 📁 File: $(basename "$FILE")
 ☁️ Drive: ZIVPN-BACKUP
@@ -407,15 +411,31 @@ backup_zivpn_drive() {
 $FILE_ID
 
 📂 File Path:
-$FILE_PATH" \
+$FILE_PATH"
+  else
+    ERROR_DESC=$(echo "$TG_RESPONSE" | jq -r '.description')
+    MSG="⚠️ Backup ZIVPN selesai (Drive OK)
+
+📁 File: $(basename "$FILE")
+☁️ Drive: ZIVPN-BACKUP
+
+❌ Telegram upload gagal
+Reason:
+$ERROR_DESC"
+  fi
+
+  # === KIRIM NOTIF ===
+  curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+    -d chat_id="$CHAT_ID" \
+    --data-urlencode "text=$MSG" \
     >/dev/null
 
   rm -f "$FILE"
 
   echo "✅ Backup selesai"
-  echo "File ID & Path dikirim ke Telegram"
   read -p "Press Enter..."
 }
+
 
 restore_zivpn_drive() {
   clear
