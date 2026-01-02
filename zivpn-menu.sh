@@ -130,8 +130,6 @@ echo " IP Limit      : $LIMIT"
 read -p "Press Enter..."
 }
 
-
-
 create_trial() {
 read -rp " Trial duration (minutes): " MIN
 [[ -z "$MIN" || "$MIN" -le 0 ]] && return
@@ -330,8 +328,6 @@ curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
   --data-urlencode "text=$TEXT" \
   --data-urlencode "parse_mode=Markdown" >/dev/null 2>&1 &
 }
-
-
 
 while true; do
 menu
