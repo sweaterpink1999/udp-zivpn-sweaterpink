@@ -187,6 +187,15 @@ EOF
 chmod 644 /etc/cron.d/zivpn-expire
 systemctl restart cron
 
+echo "[11/11] Install rclone (ONE TIME ONLY)"
+
+if ! command -v rclone >/dev/null 2>&1; then
+  echo "Installing rclone..."
+  curl -fsSL https://rclone.org/install.sh | bash
+else
+  echo "rclone already installed"
+fi
+
 
 
 timedatectl set-timezone Asia/Jakarta
