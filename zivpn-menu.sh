@@ -44,7 +44,7 @@ menu() {
 
   clear
   echo -e "${CYAN}══════════════════════════════════════${NC}"
-  echo -e "${WHITE}        Z I V P N   U D P   M E N U${NC}"
+  echo -e "${WHITE}        Z I V P N   SWEATER PINK ${NC}"
   echo -e "${CYAN}══════════════════════════════════════${NC}"
   echo -e "${GREEN} OS      ${NC}: $OS"
   echo -e "${GREEN} Domain  ${NC}: ${YELLOW}$DOMAIN${NC}"
