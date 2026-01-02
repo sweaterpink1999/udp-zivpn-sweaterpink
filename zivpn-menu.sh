@@ -231,18 +231,25 @@ echo "• Atau input PASSWORD langsung"
 echo "--------------------------------------------------"
 read -rp " Input : " INPUT
 
+# delete by number
 if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
   LINE=$(sed -n "${INPUT}p" "$DB")
   [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
-  PASS=$(echo "$LINE" | cut -d'|' -f2)
+  PASS=$(echo "$LINE" | awk -F'|' '{print $2}')
   sed -i "${INPUT}d" "$DB"
+
+# delete by password (AMAN)
 else
   PASS="$INPUT"
-  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
-  sed -i "\|$PASS|d" "$DB"
+  LINE_NUM=$(awk -F'|' -v p="$PASS" '$2==p {print NR}' "$DB")
+
+  [ -z "$LINE_NUM" ] && echo "Password not found" && sleep 2 && return
+  sed -i "${LINE_NUM}d" "$DB"
 fi
 
+# hapus dari config zivpn
 jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+
 systemctl restart zivpn
 echo -e "${GREEN}Account deleted successfully${NC}"
 sleep 2
