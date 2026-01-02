@@ -37,39 +37,40 @@ RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 ZIVPN_STATUS=$(systemctl is-active zivpn 2>/dev/null)
-menu() {
-USER_COUNT=$(grep -c '|' "$DB" 2>/dev/null)
-clear
 
 menu() {
-clear
-echo -e "${CYAN}══════════════════════════════════════${NC}"
-echo -e "${WHITE}        Z I V P N   U D P   M E N U${NC}"
-echo -e "${CYAN}══════════════════════════════════════${NC}"
-echo -e "${GREEN} OS      ${NC}: $OS"
-echo -e "${GREEN} Domain  ${NC}: ${YELLOW}$DOMAIN${NC}"
-echo -e "${GREEN} IP      ${NC}: $IP"
-echo -e "${GREEN} Uptime  ${NC}: $UPTIME"
-echo -e "${GREEN} CPU     ${NC}: $CPU Cores"
-echo -e "${GREEN} RAM     ${NC}: $RAM_USED / $RAM_TOTAL MB"
-echo -e "${GREEN} Disk    ${NC}: $DISK_USED / $DISK_TOTAL"
-echo -e "${GREEN} ZIVPN   ${NC}: ${YELLOW}$ZIVPN_STATUS${NC}"
-echo -e "${GREEN} Users   ${NC}: ${YELLOW}$USER_COUNT${NC}"
-echo -e "${CYAN}══════════════════════════════════════${NC}"
-echo -e "${YELLOW} 1${NC}) Create Account"
-echo -e "${YELLOW} 2${NC}) List Accounts"
-echo -e "${YELLOW} 3${NC}) Delete Account (Number / Password)"
-echo -e "${YELLOW} 4${NC}) Renew Account"
-echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
-echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
-echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
-echo -e "${YELLOW} 8${NC}) Change Domain"
-echo -e "${YELLOW} 9${NC}) Update Menu"
-echo -e "${YELLOW}10${NC}) Create Trial (Minutes)"
-echo -e "${RED} 0${NC}) Exit"
-echo -e "${CYAN}══════════════════════════════════════${NC}"
-read -rp " Select Menu : " opt
+  USER_COUNT=$(grep -c '|' "$DB" 2>/dev/null)
+  ZIVPN_STATUS=$(systemctl is-active zivpn 2>/dev/null)
+
+  clear
+  echo -e "${CYAN}══════════════════════════════════════${NC}"
+  echo -e "${WHITE}        Z I V P N   U D P   M E N U${NC}"
+  echo -e "${CYAN}══════════════════════════════════════${NC}"
+  echo -e "${GREEN} OS      ${NC}: $OS"
+  echo -e "${GREEN} Domain  ${NC}: ${YELLOW}$DOMAIN${NC}"
+  echo -e "${GREEN} IP      ${NC}: $IP"
+  echo -e "${GREEN} Uptime  ${NC}: $UPTIME"
+  echo -e "${GREEN} CPU     ${NC}: $CPU Cores"
+  echo -e "${GREEN} RAM     ${NC}: $RAM_USED / $RAM_TOTAL MB"
+  echo -e "${GREEN} Disk    ${NC}: $DISK_USED / $DISK_TOTAL"
+  echo -e "${GREEN} ZIVPN   ${NC}: ${YELLOW}$ZIVPN_STATUS${NC}"
+  echo -e "${GREEN} Users   ${NC}: ${YELLOW}$USER_COUNT${NC}"
+  echo -e "${CYAN}══════════════════════════════════════${NC}"
+  echo -e "${YELLOW} 1${NC}) Create Account"
+  echo -e "${YELLOW} 2${NC}) List Accounts"
+  echo -e "${YELLOW} 3${NC}) Delete Account (Number / Password)"
+  echo -e "${YELLOW} 4${NC}) Renew Account"
+  echo -e "${YELLOW} 5${NC}) Restart ZIVPN"
+  echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
+  echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
+  echo -e "${YELLOW} 8${NC}) Change Domain"
+  echo -e "${YELLOW} 9${NC}) Update Menu"
+  echo -e "${YELLOW}10${NC}) Create Trial (Minutes)"
+  echo -e "${RED} 0${NC}) Exit"
+  echo -e "${CYAN}══════════════════════════════════════${NC}"
+  read -rp " Select Menu : " opt
 }
+
 
 list_accounts() {
 clear
