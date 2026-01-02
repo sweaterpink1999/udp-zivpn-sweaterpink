@@ -155,10 +155,19 @@ mv "$TMP" "$DB"
 systemctl restart zivpn
 EOF
 
-# permission
-chmod +x /usr/bin/zivpn-expire.sh
+echo "[FIX] Install & enable cron service"
 
-# cron tiap 1 menit
+apt-get install -y cron
+
+systemctl enable cron
+systemctl restart cron
+
+echo "[FIX] Register cron job for auto delete"
+
+# hapus duplikat cron lama (kalau ada)
+crontab -l 2>/dev/null | grep -v zivpn-expire.sh | crontab -
+
+# pasang cron baru
 (crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
 
