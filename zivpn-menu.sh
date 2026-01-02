@@ -173,14 +173,62 @@ echo "Total IP Active (Server): $TOTAL_IP"
 read -p "Press Enter..."
 }
 
+renew_account() {
+list_accounts
+echo
+read -rp " Renew account number : " NUM
+read -rp " Extend days : " DAYS
+
+LINE=$(sed -n "${NUM}p" "$DB")
+[ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
+
+IFS='|' read -r U P E L <<< "$LINE"
+
+# jika expired pakai jam, buang jam
+BASE_DATE=$(echo "$E" | cut -d' ' -f1)
+NEWEXP=$(date -d "$BASE_DATE +$DAYS days" +"%Y-%m-%d")
+
+sed -i "${NUM}c\\$U|$P|$NEWEXP|$L" "$DB"
+systemctl restart zivpn
+
+echo -e "${GREEN}Account renewed successfully${NC}"
+sleep 2
+}
+
+delete_all_expired() {
+NOW=$(date +"%Y-%m-%d %H:%M")
+TMP="/tmp/zivpn-clean.db"
+> "$TMP"
+
+while IFS='|' read -r U P E L; do
+  if [[ "$E" < "$NOW" ]]; then
+    jq --arg pass "$P" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+  else
+    echo "$U|$P|$E|$L" >> "$TMP"
+  fi
+done < "$DB"
+
+mv "$TMP" "$DB"
+systemctl restart zivpn
+
+echo -e "${GREEN}Expired accounts deleted${NC}"
+sleep 2
+}
+
+restart_zivpn() {
+systemctl restart zivpn
+echo -e "${GREEN}ZIVPN restarted successfully${NC}"
+sleep 2
+}
+
 while true; do
 menu
 case $opt in
 1) create_account ;;
 2) list_accounts; read -p "Press Enter..." ;;
 3) delete_account ;;
-4) echo "Gunakan menu renew lama"; sleep 2 ;;
-5) systemctl restart zivpn ;;
+4) renew_account ;;
+5) restart_zivpn ;;
 6) delete_all_expired ;;
 7) ip_monitor ;;
 8) change_domain ;;
