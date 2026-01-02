@@ -444,14 +444,16 @@ backup_zivpn_drive() {
   FILE="/root/zivpn-backup-$DATE.zip"
   REMOTE="gdrive:ZIVPN-BACKUP"
 
-  # === BUAT ZIP ===
-  zip -r "$FILE" \
-    /etc/zivpn/users.db \
-    /etc/zivpn/config.json \
-    /etc/zivpn/domain.conf \
-    /etc/zivpn/zivpn.crt \
-    /etc/zivpn/zivpn.key \
-    >/dev/null 2>&1
+# === BUAT ZIP ===
+zip -r "$FILE" \
+  /etc/zivpn/users.db \
+  /etc/zivpn/config.json \
+  /etc/zivpn/domain.conf \
+  /etc/zivpn/zivpn.crt \
+  /etc/zivpn/zivpn.key \
+  /root/.config/rclone/rclone.conf \
+  >/dev/null 2>&1
+
 
   # === CEK RCLONE ===
   DRIVE_STATUS="☁️ Drive: dilewati (rclone tidak tersedia)"
