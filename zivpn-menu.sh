@@ -95,7 +95,23 @@ echo "--------------------------------------------------------------------------
 }
 
 create_account() {
-read -rp " Username : " USER
+
+# ===== CEK USERNAME UNIK =====
+while true; do
+  read -rp " Username : " USER
+
+  # validasi kosong
+  [ -z "$USER" ] && echo "Username tidak boleh kosong!" && continue
+
+  # cek apakah username sudah ada di DB
+  if grep -q "^$USER|" "$DB"; then
+    echo "❌ Username '$USER' sudah ada, gunakan username lain!"
+    continue
+  fi
+
+  break
+done
+
 read -rp " Duration (days) : " DAYS
 read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
 [ "$LIMIT" = "0" ] && LIMIT="∞"
@@ -103,12 +119,14 @@ read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
 
+# simpan ke config & DB
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
+
 systemctl restart zivpn
 
 # ===== TELEGRAM NOTIFICATION =====
-send_telegram "📢 *ZIVPN ACCOUNT CREATED*
+send_telegram "📢 *_PEMBELIAN BERHASIL_*
 ────────────────────
 🌐 Domain        : $DOMAIN
 👤 Username      : $USER
@@ -129,6 +147,7 @@ echo " Aktif Selama  : $DAYS Hari"
 echo " IP Limit      : $LIMIT"
 read -p "Press Enter..."
 }
+
 
 create_trial() {
 read -rp " Trial duration (minutes): " MIN
