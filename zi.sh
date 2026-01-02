@@ -49,7 +49,7 @@ cat > /etc/zivpn/config.json << EOF
   "obfs": "zivpn",
   "auth": {
     "mode": "passwords",
-    "config": ["zi"]
+    "config": ["qwerty99"]
   }
 }
 EOF
