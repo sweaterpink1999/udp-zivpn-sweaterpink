@@ -27,6 +27,22 @@ if ! command -v jq >/dev/null 2>&1; then
   apt install -y jq >/dev/null 2>&1
 fi
 
+# ===== ENSURE ZIP & UNZIP =====
+if ! command -v zip >/dev/null 2>&1; then
+  apt install -y zip >/dev/null 2>&1
+fi
+
+if ! command -v unzip >/dev/null 2>&1; then
+  apt install -y unzip >/dev/null 2>&1
+fi
+
+# ===== ENSURE RCLONE =====
+if ! command -v rclone >/dev/null 2>&1; then
+  echo "❌ rclone belum terinstall!"
+  echo "Install dulu: curl https://rclone.org/install.sh | bash"
+  sleep 2
+fi
+
 # ===== COLORS =====
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -376,6 +392,10 @@ backup_zivpn_drive() {
   FILE="/root/zivpn-backup-$DATE.zip"
   REMOTE="gdrive:ZIVPN-BACKUP"
 
+  # Pastikan folder Google Drive ada
+rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
+
+
   zip -r "$FILE" \
     /etc/zivpn/users.db \
     /etc/zivpn/config.json \
@@ -460,8 +480,9 @@ restore_zivpn_drive() {
     return
   fi
 
-  tar -xzf "/root/$FILE" -C /
-  systemctl restart zivpn
+  unzip -o "/root/$FILE" -d /
+rm -f "/root/$FILE"
+systemctl restart zivpn
 
   echo "✅ Restore selesai, ZIVPN direstart"
   read -p "Press Enter..."
