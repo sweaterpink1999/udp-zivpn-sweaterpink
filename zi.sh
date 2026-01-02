@@ -161,6 +161,8 @@ chmod +x /usr/bin/zivpn-expire.sh
 
 (crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
+timedatectl set-timezone Asia/Jakarta
+
 echo
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
