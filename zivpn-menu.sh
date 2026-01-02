@@ -221,6 +221,33 @@ echo -e "${GREEN}ZIVPN restarted successfully${NC}"
 sleep 2
 }
 
+delete_account() {
+list_accounts
+echo
+echo "DELETE ACCOUNT"
+echo "--------------------------------------------------"
+echo "• Input NUMBER (1,2,3)"
+echo "• Atau input PASSWORD langsung"
+echo "--------------------------------------------------"
+read -rp " Input : " INPUT
+
+if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
+  LINE=$(sed -n "${INPUT}p" "$DB")
+  [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
+  PASS=$(echo "$LINE" | cut -d'|' -f2)
+  sed -i "${INPUT}d" "$DB"
+else
+  PASS="$INPUT"
+  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
+  sed -i "\|$PASS|d" "$DB"
+fi
+
+jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+systemctl restart zivpn
+echo -e "${GREEN}Account deleted successfully${NC}"
+sleep 2
+}
+
 while true; do
 menu
 case $opt in
