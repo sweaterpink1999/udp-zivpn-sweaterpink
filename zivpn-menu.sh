@@ -108,7 +108,7 @@ echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
 
 # ===== TELEGRAM NOTIFICATION =====
-send_telegram "*_PEMBELIAN BERHASIL_*
+send_telegram "📢 *ZIVPN ACCOUNT CREATED*
 ────────────────────
 🌐 Domain        : $DOMAIN
 👤 Username      : $USER
@@ -129,6 +129,7 @@ echo " Aktif Selama  : $DAYS Hari"
 echo " IP Limit      : $LIMIT"
 read -p "Press Enter..."
 }
+
 
 
 create_trial() {
