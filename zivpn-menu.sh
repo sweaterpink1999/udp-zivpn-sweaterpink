@@ -117,7 +117,7 @@ send_telegram "📢 *ZIVPN ACCOUNT CREATED*
 📆 Aktif Selama  : $DAYS Hari
 📱 IP Limit      : $LIMIT
 ────────────────────
-✅ Type          : HARIAN"
+✅ Type          : BULANAN"
 
 clear
 echo -e "${GREEN}ACCOUNT CREATED${NC}"
