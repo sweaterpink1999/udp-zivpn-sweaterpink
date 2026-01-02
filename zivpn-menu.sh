@@ -63,6 +63,7 @@ echo -e "${YELLOW} 6${NC}) Delete All Expired Accounts"
 echo -e "${YELLOW} 7${NC}) Check User Usage (IP Monitor)"
 echo -e "${YELLOW} 8${NC}) Change Domain"
 echo -e "${YELLOW} 9${NC}) Update Menu"
+echo -e "${YELLOW}10${NC}) Create Trial (Minutes)"
 echo -e "${RED} 0${NC}) Exit"
 echo -e "${CYAN}══════════════════════════════════════${NC}"
 read -rp " Select Menu : " opt
@@ -71,12 +72,12 @@ read -rp " Select Menu : " opt
 list_accounts() {
 clear
 echo "--------------------------------------------------------------------------"
-printf "%-4s %-15s %-18s %-12s %-8s\n" "No" "Username" "Password" "Expired" "IP Limit"
+printf "%-4s %-15s %-18s %-16s %-8s\n" "No" "Username" "Password" "Expired" "Limit"
 echo "--------------------------------------------------------------------------"
 nl -w2 -s'. ' "$DB" | while read -r n l; do
   IFS='|' read -r U P E L <<< "$l"
   [ -z "$L" ] && L="∞"
-  printf "%-4s %-15s %-18s %-12s %-8s\n" "$n" "$U" "$P" "$E" "$L"
+  printf "%-4s %-15s %-18s %-16s %-8s\n" "$n" "$U" "$P" "$E" "$L"
 done
 echo "--------------------------------------------------------------------------"
 }
@@ -104,31 +105,28 @@ echo " IP Limit : $LIMIT"
 read -p "Press Enter..."
 }
 
-delete_account() {
-list_accounts
-echo
-echo "DELETE ACCOUNT"
-echo "--------------------------------------------------"
-echo "• Input NUMBER (1,2,3)"
-echo "• Atau input PASSWORD langsung"
-echo "--------------------------------------------------"
-read -rp " Input : " INPUT
+# ===== MENU 10: TRIAL PER MENIT =====
+create_trial() {
+read -rp " Trial duration (minutes): " MIN
+[[ -z "$MIN" || "$MIN" -le 0 ]] && return
 
-if [[ "$INPUT" =~ ^[0-9]+$ ]]; then
-  LINE=$(sed -n "${INPUT}p" "$DB")
-  [ -z "$LINE" ] && echo "Invalid number" && sleep 2 && return
-  PASS=$(echo "$LINE" | cut -d'|' -f2)
-  sed -i "${INPUT}d" "$DB"
-else
-  PASS="$INPUT"
-  grep -q "|$PASS|" "$DB" || { echo "Password not found"; sleep 2; return; }
-  sed -i "\|$PASS|d" "$DB"
-fi
+USER="trial$(tr -dc 0-9 </dev/urandom | head -c 4)"
+PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 12)
+EXP=$(date -d "+$MIN minutes" +"%Y-%m-%d %H:%M")
+LIMIT=1
 
-jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
-echo -e "${GREEN}Account deleted successfully${NC}"
-sleep 2
+
+clear
+echo -e "${GREEN}TRIAL CREATED${NC}"
+echo " Domain   : $DOMAIN"
+echo " Username : $USER"
+echo " Password : $PASS"
+echo " Expired  : $EXP"
+echo " Limit IP : 1"
+read -p "Press Enter..."
 }
 
 change_domain() {
@@ -151,7 +149,7 @@ ip_monitor() {
 clear
 echo "USER USAGE MONITOR"
 echo "--------------------------------------------------"
-printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "IP Limit" "Active IP"
+printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "Limit" "Active"
 echo "--------------------------------------------------"
 
 TOTAL=0
@@ -178,7 +176,7 @@ case $opt in
 1) create_account ;;
 2) list_accounts; read -p "Press Enter..." ;;
 3) delete_account ;;
-4) echo "Gunakan menu renew lama (aman)"; sleep 2 ;;
+4) echo "Gunakan menu renew lama"; sleep 2 ;;
 5) systemctl restart zivpn ;;
 6) delete_all_expired ;;
 7) ip_monitor ;;
@@ -188,6 +186,7 @@ curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpi
 chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
 ;;
+10) create_trial ;;
 0) exit ;;
 esac
 done
