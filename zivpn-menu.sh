@@ -130,6 +130,7 @@ echo " IP Limit      : $LIMIT"
 read -p "Press Enter..."
 }
 
+
 create_trial() {
 read -rp " Trial duration (minutes): " MIN
 [[ -z "$MIN" || "$MIN" -le 0 ]] && return
