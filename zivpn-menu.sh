@@ -36,11 +36,21 @@ if ! command -v unzip >/dev/null 2>&1; then
   apt install -y unzip >/dev/null 2>&1
 fi
 
-# ===== ENSURE RCLONE =====
-if ! command -v rclone >/dev/null 2>&1; then
-  echo "❌ rclone belum terinstall!"
-  echo "Install dulu: curl https://rclone.org/install.sh | bash"
-  sleep 2
+# ===== ENSURE RCLONE (AUTO INSTALL) =====
+HAS_RCLONE=false
+
+if command -v rclone >/dev/null 2>&1; then
+  HAS_RCLONE=true
+else
+  echo "📦 rclone tidak ditemukan, menginstall..."
+  curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1
+
+  if command -v rclone >/dev/null 2>&1; then
+    HAS_RCLONE=true
+    echo "✅ rclone berhasil diinstall"
+  else
+    echo "⚠️ rclone gagal diinstall"
+  fi
 fi
 
 # ===== COLORS =====
@@ -392,10 +402,7 @@ backup_zivpn_drive() {
   FILE="/root/zivpn-backup-$DATE.zip"
   REMOTE="gdrive:ZIVPN-BACKUP"
 
-  # Pastikan folder Google Drive ada
-rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
-
-
+  # === BUAT ZIP ===
   zip -r "$FILE" \
     /etc/zivpn/users.db \
     /etc/zivpn/config.json \
@@ -404,20 +411,24 @@ rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
     /etc/zivpn/zivpn.key \
     >/dev/null 2>&1
 
-  # === UPLOAD GOOGLE DRIVE (UTAMA) ===
-  rclone copy "$FILE" "$REMOTE"
+  # === CEK RCLONE ===
+  DRIVE_STATUS="☁️ Drive: dilewati (rclone tidak tersedia)"
 
-  # === UPLOAD TELEGRAM (OPSIONAL) ===
+  if command -v rclone >/dev/null 2>&1; then
+    rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
+    rclone copy "$FILE" "$REMOTE"
+    DRIVE_STATUS="☁️ Drive: ZIVPN-BACKUP"
+  fi
+
+  # === UPLOAD TELEGRAM ===
   TG_RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
     -F chat_id="$CHAT_ID" \
     -F document=@"$FILE")
 
-  # === CEK HASIL TELEGRAM ===
   OK=$(echo "$TG_RESPONSE" | jq -r '.ok')
 
   if [[ "$OK" == "true" ]]; then
     FILE_ID=$(echo "$TG_RESPONSE" | jq -r '.result.document.file_id')
-
     FILE_PATH=$(curl -s \
       "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" \
       | jq -r '.result.file_path')
@@ -425,7 +436,7 @@ rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
     MSG="✅ Backup ZIVPN selesai
 
 📁 File: $(basename "$FILE")
-☁️ Drive: ZIVPN-BACKUP
+$DRIVE_STATUS
 
 🆔 File ID:
 $FILE_ID
@@ -434,27 +445,26 @@ $FILE_ID
 $FILE_PATH"
   else
     ERROR_DESC=$(echo "$TG_RESPONSE" | jq -r '.description')
-    MSG="⚠️ Backup ZIVPN selesai (Drive OK)
+    MSG="⚠️ Backup ZIVPN selesai
 
 📁 File: $(basename "$FILE")
-☁️ Drive: ZIVPN-BACKUP
+$DRIVE_STATUS
 
 ❌ Telegram upload gagal
-Reason:
 $ERROR_DESC"
   fi
 
   # === KIRIM NOTIF ===
   curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
     -d chat_id="$CHAT_ID" \
-    --data-urlencode "text=$MSG" \
-    >/dev/null
+    --data-urlencode "text=$MSG" >/dev/null
 
   rm -f "$FILE"
 
   echo "✅ Backup selesai"
   read -p "Press Enter..."
 }
+
 
 
 restore_zivpn_drive() {
