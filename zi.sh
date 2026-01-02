@@ -37,8 +37,6 @@ chmod +x /usr/local/bin/zivpn
 
 echo "[4/10] Setup config, domain & certificate"
 mkdir -p /etc/zivpn
-
-# simpan domain
 echo "$DOMAIN" > /etc/zivpn/domain.conf
 
 cat > /etc/zivpn/config.json << EOF
@@ -89,7 +87,6 @@ iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-d
 iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
-
 netfilter-persistent save
 
 echo "[8/10] Install menu"
@@ -114,32 +111,38 @@ fi
 EOF
 chmod +x /etc/profile.d/zivpn-autostart.sh
 
-echo "[10/10] Install auto delete expired user (CRON)"
+echo "[10/10] Install AUTO DELETE expired (DATE + TIME)"
 cat > /usr/bin/zivpn-expire.sh << 'EOF'
 #!/bin/bash
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
-TODAY=$(date +"%Y-%m-%d")
+NOW=$(date +"%Y-%m-%d %H:%M")
 
 [ ! -f "$DB" ] && exit 0
+TMP="/tmp/zivpn-clean.db"
+> "$TMP"
 
 while IFS='|' read -r USER PASS EXP LIMIT; do
-  if [[ "$EXP" < "$TODAY" ]]; then
-    sed -i "\|$USER|$PASS|$EXP|$LIMIT|d" "$DB"
+  if [[ "$EXP" < "$NOW" ]]; then
     jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+  else
+    echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
   fi
 done < "$DB"
 
+mv "$TMP" "$DB"
 systemctl restart zivpn
 EOF
 
 chmod +x /usr/bin/zivpn-expire.sh
-(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
 echo
 echo "======================================"
 echo " ZIVPN UDP INSTALLED SUCCESSFULLY"
 echo " Domain : $DOMAIN"
+echo " AUTO DELETE : DATE + TIME"
+echo " Trial menit : AMAN"
 echo " SSH LOGIN → AUTO MENU"
 echo " CTRL + C → BACK TO SHELL"
 echo " Manual menu : menu"
