@@ -505,8 +505,7 @@ $ERROR_DESC"
 
 echo "✅ Backup selesai"
 [[ "$1" != "--autobackup" ]] && read -p "Press Enter..."
-
-
+}
 
 restore_zivpn_drive() {
   clear
