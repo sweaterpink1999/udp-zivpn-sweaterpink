@@ -37,7 +37,9 @@ RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 ZIVPN_STATUS=$(systemctl is-active zivpn 2>/dev/null)
+menu() {
 USER_COUNT=$(grep -c '|' "$DB" 2>/dev/null)
+clear
 
 menu() {
 clear
