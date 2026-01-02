@@ -112,7 +112,6 @@ EOF
 chmod +x /etc/profile.d/zivpn-autostart.sh
 
 echo "[10/10] Install AUTO DELETE expired (DATE + TIME - FINAL)"
-
 # ===== CREATE EXPIRE SCRIPT =====
 cat > /usr/local/bin/zivpn-expire.sh << 'EOF'
 #!/bin/bash
