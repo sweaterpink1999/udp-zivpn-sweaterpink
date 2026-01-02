@@ -13,6 +13,14 @@ touch "$DB"
 
 DOMAIN=$(cat "$DOMAIN_FILE")
 
+# ===== TELEGRAM FILE =====
+TG_FILE="/etc/zivpn/telegram.conf"
+
+# load telegram config jika ada
+if [ -f "$TG_FILE" ]; then
+  source "$TG_FILE"
+fi
+
 # ===== ENSURE JQ =====
 if ! command -v jq >/dev/null 2>&1; then
   apt update -y >/dev/null 2>&1
@@ -66,6 +74,7 @@ menu() {
   echo -e "${YELLOW} 8${NC}) Change Domain"
   echo -e "${YELLOW} 9${NC}) Update Menu"
   echo -e "${YELLOW}10${NC}) Create Trial (Minutes)"
+  echo -e "${YELLOW}11${NC}) Telegram Bot Setting"
   echo -e "${RED} 0${NC}) Exit"
   echo -e "${CYAN}══════════════════════════════════════${NC}"
   read -rp " Select Menu : " opt
@@ -258,6 +267,47 @@ echo -e "${GREEN}Account deleted successfully${NC}"
 sleep 2
 }
 
+telegram_setting() {
+clear
+echo "===================================="
+echo "   TELEGRAM BOT NOTIFICATION SETUP"
+echo "===================================="
+read -rp "Input Bot Token : " BOT_TOKEN
+read -rp "Input Chat ID   : " CHAT_ID
+
+if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
+  echo "Bot Token & Chat ID tidak boleh kosong!"
+  sleep 2
+  return
+fi
+
+cat > "$TG_FILE" <<EOF
+BOT_TOKEN="$BOT_TOKEN"
+CHAT_ID="$CHAT_ID"
+EOF
+
+chmod 600 "$TG_FILE"
+
+echo
+echo "Telegram Bot berhasil disimpan!"
+echo "Bot Token : $BOT_TOKEN"
+echo "Chat ID   : $CHAT_ID"
+sleep 2
+}
+
+send_telegram() {
+[ -z "$BOT_TOKEN" ] && return
+[ -z "$CHAT_ID" ] && return
+
+TEXT="$1"
+curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+  -d chat_id="$CHAT_ID" \
+  --data-urlencode "text=$TEXT" \
+  --data-urlencode "parse_mode=Markdown" >/dev/null 2>&1 &
+}
+
+
+
 while true; do
 menu
 case $opt in
@@ -275,6 +325,7 @@ chmod +x /usr/bin/zivpn-menu
 exec bash /usr/bin/zivpn-menu
 ;;
 10) create_trial ;;
+11) telegram_setting ;;
 0) exit ;;
 esac
 done
