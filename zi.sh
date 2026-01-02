@@ -190,12 +190,51 @@ systemctl restart cron
 echo "[11/11] Install rclone (ONE TIME ONLY)"
 
 if ! command -v rclone >/dev/null 2>&1; then
-  echo "Installing rclone..."
-  curl -fsSL https://rclone.org/install.sh | bash
+  echo "Installing rclone (fast mode)..."
+
+  apt-get install -y unzip >/dev/null 2>&1
+
+  TMP_DIR=$(mktemp -d)
+  cd "$TMP_DIR"
+
+  ARCH=$(uname -m)
+  if [[ "$ARCH" == "x86_64" ]]; then
+    RCLONE_ZIP="rclone-current-linux-amd64.zip"
+  elif [[ "$ARCH" == "aarch64" ]]; then
+    RCLONE_ZIP="rclone-current-linux-arm64.zip"
+  else
+    echo "Unsupported architecture for rclone"
+    exit 1
+  fi
+
+  wget -q "https://downloads.rclone.org/$RCLONE_ZIP"
+  unzip -q "$RCLONE_ZIP"
+
+  cp rclone-*/rclone /usr/bin/rclone
+  chmod +x /usr/bin/rclone
+
+  cd /
+  rm -rf "$TMP_DIR"
+
+  echo "✅ rclone installed successfully"
 else
-  echo "rclone already installed"
+  echo "✅ rclone already installed"
 fi
 
+echo "[12/12] Setup Auto Reboot (04:00 WIB)"
+
+# hapus reboot lama kalau ada
+rm -f /etc/cron.d/zivpn-reboot
+
+# buat cron reboot jam 04:00
+cat > /etc/cron.d/zivpn-reboot << 'EOF'
+0 4 * * * root /sbin/reboot
+EOF
+
+chmod 644 /etc/cron.d/zivpn-reboot
+systemctl restart cron
+
+echo "✅ Auto reboot aktif setiap jam 04:00 pagi"
 
 
 timedatectl set-timezone Asia/Jakarta
