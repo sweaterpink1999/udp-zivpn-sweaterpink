@@ -75,6 +75,7 @@ menu() {
   echo -e "${YELLOW} 9${NC}) Update Menu"
   echo -e "${YELLOW}10${NC}) Create Trial (Minutes)"
   echo -e "${YELLOW}11${NC}) Telegram Bot Setting"
+  echo -e "${YELLOW}12${NC}) Backup & Restore (Google Drive)"
   echo -e "${RED} 0${NC}) Exit"
   echo -e "${CYAN}══════════════════════════════════════${NC}"
   read -rp " Select Menu : " opt
@@ -348,6 +349,85 @@ curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
   --data-urlencode "parse_mode=Markdown" >/dev/null 2>&1 &
 }
 
+backup_restore_drive() {
+  clear
+  echo "======================================"
+  echo " BACKUP & RESTORE ZIVPN (GOOGLE DRIVE)"
+  echo "======================================"
+  echo "1) Backup sekarang"
+  echo "2) Restore dari Google Drive"
+  echo "0) Back"
+  echo "======================================"
+  read -rp "Pilih: " br
+
+  case $br in
+    1) backup_zivpn_drive ;;
+    2) restore_zivpn_drive ;;
+    0) return ;;
+    *) backup_restore_drive ;;
+  esac
+}
+
+backup_zivpn_drive() {
+  clear
+  [ -z "$BOT_TOKEN" ] && echo "Telegram bot belum diset!" && sleep 2 && return
+
+  DATE=$(date +%Y%m%d-%H%M)
+  FILE="/root/zivpn-backup-$DATE.tar.gz"
+  REMOTE="gdrive:ZIVPN-BACKUP"
+
+  tar -czf "$FILE" \
+    /etc/zivpn/users.db \
+    /etc/zivpn/config.json \
+    /etc/zivpn/domain.conf \
+    /etc/zivpn/zivpn.crt \
+    /etc/zivpn/zivpn.key \
+    2>/dev/null
+
+  rclone copy "$FILE" "$REMOTE"
+
+  curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+    -d chat_id="$CHAT_ID" \
+    -d text="✅ Backup ZIVPN berhasil\n📁 File: $(basename "$FILE")\n☁️ Google Drive: ZIVPN-BACKUP" \
+    >/dev/null
+
+  rm -f "$FILE"
+
+  echo "✅ Backup selesai & notif terkirim"
+  read -p "Press Enter..."
+}
+
+restore_zivpn_drive() {
+  clear
+  echo "Daftar file backup di Google Drive:"
+  echo "----------------------------------"
+  rclone ls gdrive:ZIVPN-BACKUP
+  echo "----------------------------------"
+
+  read -rp "Masukkan nama file backup: " FILE
+
+  if [[ -z "$FILE" ]]; then
+    echo "❌ Nama file kosong!"
+    sleep 2
+    return
+  fi
+
+  rclone copy "gdrive:ZIVPN-BACKUP/$FILE" /root/
+
+  if [[ ! -f "/root/$FILE" ]]; then
+    echo "❌ Download gagal!"
+    sleep 2
+    return
+  fi
+
+  tar -xzf "/root/$FILE" -C /
+  systemctl restart zivpn
+
+  echo "✅ Restore selesai, ZIVPN direstart"
+  read -p "Press Enter..."
+}
+
+
 while true; do
 menu
 case $opt in
@@ -384,6 +464,7 @@ exec /usr/bin/zivpn-menu
 ;;
 10) create_trial ;;
 11) telegram_setting ;;
+12) backup_restore_drive ;;
 0) exit ;;
 esac
 done
