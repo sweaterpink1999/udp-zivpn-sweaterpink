@@ -373,27 +373,47 @@ backup_zivpn_drive() {
   [ -z "$BOT_TOKEN" ] && echo "Telegram bot belum diset!" && sleep 2 && return
 
   DATE=$(date +%Y%m%d-%H%M)
-  FILE="/root/zivpn-backup-$DATE.tar.gz"
+  FILE="/root/zivpn-backup-$DATE.zip"
   REMOTE="gdrive:ZIVPN-BACKUP"
 
-  tar -czf "$FILE" \
+  zip -r "$FILE" \
     /etc/zivpn/users.db \
     /etc/zivpn/config.json \
     /etc/zivpn/domain.conf \
     /etc/zivpn/zivpn.crt \
     /etc/zivpn/zivpn.key \
-    2>/dev/null
+    >/dev/null 2>&1
 
+  # Upload ke Google Drive
   rclone copy "$FILE" "$REMOTE"
 
+  # Upload ke Telegram
+  RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
+    -F chat_id="$CHAT_ID" \
+    -F document=@"$FILE")
+
+  FILE_ID=$(echo "$RESPONSE" | jq -r '.result.document.file_id')
+  FILE_PATH=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getFile?file_id=$FILE_ID" | jq -r '.result.file_path')
+
+  # Kirim info File ID & Path
   curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
     -d chat_id="$CHAT_ID" \
-    -d text="✅ Backup ZIVPN berhasil\n📁 File: $(basename "$FILE")\n☁️ Google Drive: ZIVPN-BACKUP" \
+    -d text="✅ Backup ZIVPN selesai
+
+📁 File: $(basename "$FILE")
+☁️ Drive: ZIVPN-BACKUP
+
+🆔 File ID:
+$FILE_ID
+
+📂 File Path:
+$FILE_PATH" \
     >/dev/null
 
   rm -f "$FILE"
 
-  echo "✅ Backup selesai & notif terkirim"
+  echo "✅ Backup selesai"
+  echo "File ID & Path dikirim ke Telegram"
   read -p "Press Enter..."
 }
 
