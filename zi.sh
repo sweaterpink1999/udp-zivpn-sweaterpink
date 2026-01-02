@@ -134,6 +134,22 @@ mv "$TMP" "$DB"
 systemctl restart zivpn
 EOF
 
+[ ! -f "$DB" ] && exit 0
+TMP="/tmp/zivpn-clean.db"
+> "$TMP"
+
+while IFS='|' read -r USER PASS EXP LIMIT; do
+  if [[ "$EXP" < "$NOW" ]]; then
+    jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+  else
+    echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
+  fi
+done < "$DB"
+
+mv "$TMP" "$DB"
+systemctl restart zivpn
+EOF
+
 chmod +x /usr/bin/zivpn-expire.sh
 (crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
