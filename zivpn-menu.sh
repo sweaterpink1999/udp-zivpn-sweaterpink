@@ -378,10 +378,13 @@ curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
 backup_restore_drive() {
   clear
   echo "======================================"
-  echo " BACKUP & RESTORE ZIVPN (GOOGLE DRIVE)"
+  echo " BACKUP & RESTORE ZIVPN"
   echo "======================================"
   echo "1) Backup sekarang"
-  echo "2) Restore dari Google Drive"
+  echo "2) Restore"
+  echo "3) Aktifkan Auto Backup (03:00)"
+  echo "4) Nonaktifkan Auto Backup"
+  echo "5) Set Jam Auto Backup"
   echo "0) Back"
   echo "======================================"
   read -rp "Pilih: " br
@@ -389,10 +392,49 @@ backup_restore_drive() {
   case $br in
     1) backup_zivpn_drive ;;
     2) restore_zivpn_drive ;;
+    3) enable_autobackup ;;
+    4) disable_autobackup ;;
+    5) set_autobackup_time ;;
     0) return ;;
     *) backup_restore_drive ;;
   esac
 }
+
+enable_autobackup() {
+  crontab -l 2>/dev/null | grep -v zivpn-menu > /tmp/cron.tmp
+  echo "0 3 * * * /usr/bin/zivpn-menu --autobackup" >> /tmp/cron.tmp
+  crontab /tmp/cron.tmp
+  rm -f /tmp/cron.tmp
+
+  echo "✅ Auto Backup diaktifkan"
+  echo "⏰ Setiap hari jam 03:00 pagi"
+  sleep 2
+}
+
+disable_autobackup() {
+  crontab -l 2>/dev/null | grep -v zivpn-menu | crontab -
+  echo "❌ Auto Backup dimatikan"
+  sleep 2
+}
+
+set_autobackup_time() {
+  read -rp "Masukkan JAM (0-23): " HOUR
+
+  if ! [[ "$HOUR" =~ ^[0-9]+$ ]] || [ "$HOUR" -gt 23 ]; then
+    echo "❌ Jam tidak valid"
+    sleep 2
+    return
+  fi
+
+  crontab -l 2>/dev/null | grep -v zivpn-menu > /tmp/cron.tmp
+  echo "0 $HOUR * * * /usr/bin/zivpn-menu --autobackup" >> /tmp/cron.tmp
+  crontab /tmp/cron.tmp
+  rm -f /tmp/cron.tmp
+
+  echo "✅ Auto Backup diset ke jam $HOUR:00"
+  sleep 2
+}
+
 
 backup_zivpn_drive() {
   clear
@@ -461,9 +503,8 @@ $ERROR_DESC"
 
   rm -f "$FILE"
 
-  echo "✅ Backup selesai"
-  read -p "Press Enter..."
-}
+echo "✅ Backup selesai"
+[[ "$1" != "--autobackup" ]] && read -p "Press Enter..."
 
 
 
@@ -478,8 +519,16 @@ restore_zivpn_drive() {
   echo "======================================"
   read -rp "Pilih: " rmode
 
-  case $rmode in
+ case $rmode in
   1)
+    # === CEK RCLONE DULU ===
+    if ! command -v rclone >/dev/null 2>&1; then
+      echo "❌ rclone tidak tersedia di VPS ini"
+      echo "Restore Google Drive tidak bisa digunakan"
+      sleep 2
+      return
+    fi
+
     clear
     echo "Daftar backup di Google Drive:"
     echo "----------------------------------"
@@ -528,6 +577,12 @@ restore_zivpn_drive() {
   echo "✅ Restore selesai, ZIVPN direstart"
   read -p "Press Enter..."
 }
+
+# ===== AUTO BACKUP MODE (CRON) =====
+if [[ "$1" == "--autobackup" ]]; then
+  backup_zivpn_drive
+  exit 0
+fi
 
 
 while true; do
