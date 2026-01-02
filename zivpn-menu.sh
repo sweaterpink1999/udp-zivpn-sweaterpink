@@ -36,23 +36,6 @@ if ! command -v unzip >/dev/null 2>&1; then
   apt install -y unzip >/dev/null 2>&1
 fi
 
-# ===== ENSURE RCLONE (AUTO INSTALL) =====
-HAS_RCLONE=false
-
-if command -v rclone >/dev/null 2>&1; then
-  HAS_RCLONE=true
-else
-  echo "📦 rclone tidak ditemukan, menginstall..."
-  curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1
-
-  if command -v rclone >/dev/null 2>&1; then
-    HAS_RCLONE=true
-    echo "✅ rclone berhasil diinstall"
-  else
-    echo "⚠️ rclone gagal diinstall"
-  fi
-fi
-
 # ===== COLORS =====
 RED='\033[0;31m'
 GREEN='\033[0;32m'
