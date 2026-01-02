@@ -152,27 +152,27 @@ ip_monitor() {
 clear
 echo "USER USAGE MONITOR"
 echo "--------------------------------------------------"
-printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "Limit" "ActiveIP"
+printf "%-10s %-18s %-8s %-10s\n" "Username" "Password" "Limit" "Status"
 echo "--------------------------------------------------"
 
-TOTAL=0
-
-# ambil IP aktif dari conntrack (UDP zivpn)
-conntrack -L -p udp 2>/dev/null | grep dport=5667 | awk '{print $5}' | cut -d= -f2 | sort | uniq -c > /tmp/zivpn.ip
+# hitung total IP aktif server
+TOTAL_IP=$(ss -u -n state connected '( sport = :5667 )' | wc -l)
 
 while IFS='|' read -r U P E L; do
   [ -z "$L" ] && L="∞"
 
-  ACTIVE=$(grep -w "$P" /tmp/zivpn.ip | awk '{print $1}')
-  [ -z "$ACTIVE" ] && ACTIVE=0
+  # cek apakah ADA koneksi UDP sama sekali
+  if [ "$TOTAL_IP" -gt 0 ]; then
+    STATUS="ONLINE"
+  else
+    STATUS="OFFLINE"
+  fi
 
-  TOTAL=$((TOTAL+ACTIVE))
-
-  printf "%-10s %-18s %-8s %-10s\n" "$U" "$P" "$L" "$ACTIVE"
+  printf "%-10s %-18s %-8s %-10s\n" "$U" "$P" "$L" "$STATUS"
 done < "$DB"
 
 echo "--------------------------------------------------"
-echo "Total IP Active (Server): $TOTAL"
+echo "Total IP Active (Server): $TOTAL_IP"
 read -p "Press Enter..."
 }
 
