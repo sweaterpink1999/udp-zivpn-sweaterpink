@@ -360,9 +360,27 @@ case $opt in
 7) ip_monitor ;;
 8) change_domain ;;
 9)
-curl -fsSL https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh -o /usr/bin/zivpn-menu
-chmod +x /usr/bin/zivpn-menu
-exec bash /usr/bin/zivpn-menu
+echo "Updating ZIVPN Menu..."
+TMP_FILE="/tmp/zivpn-menu-$(date +%s).sh"
+
+curl -fsSL \
+  -H "Cache-Control: no-cache" \
+  -H "Pragma: no-cache" \
+  "https://raw.githubusercontent.com/sweaterpink1999/udp-zivpn-sweaterpink/main/zivpn-menu.sh?nocache=$(date +%s)" \
+  -o "$TMP_FILE"
+
+if [ ! -s "$TMP_FILE" ]; then
+  echo "❌ Update gagal! File kosong."
+  sleep 2
+  break
+fi
+
+chmod +x "$TMP_FILE"
+mv "$TMP_FILE" /usr/bin/zivpn-menu
+
+echo "✅ Menu berhasil di-update ke versi terbaru"
+sleep 1
+exec /usr/bin/zivpn-menu
 ;;
 10) create_trial ;;
 11) telegram_setting ;;
