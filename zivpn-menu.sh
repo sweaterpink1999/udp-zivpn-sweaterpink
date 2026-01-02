@@ -456,13 +456,15 @@ zip -r "$FILE" \
 
 
   # === CEK RCLONE ===
-  DRIVE_STATUS="☁️ Drive: dilewati (rclone tidak tersedia)"
+DRIVE_STATUS="☁️ Drive: dilewati (belum terhubung)"
 
-  if command -v rclone >/dev/null 2>&1; then
+if command -v rclone >/dev/null 2>&1; then
+  if rclone listremotes 2>/dev/null | grep -q "^gdrive:"; then
     rclone lsd "$REMOTE" >/dev/null 2>&1 || rclone mkdir "$REMOTE"
-    rclone copy "$FILE" "$REMOTE"
+    rclone copy "$FILE" "$REMOTE" >/dev/null 2>&1
     DRIVE_STATUS="☁️ Drive: ZIVPN-BACKUP"
   fi
+fi
 
   # === UPLOAD TELEGRAM ===
   TG_RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
