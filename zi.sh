@@ -111,15 +111,20 @@ fi
 EOF
 chmod +x /etc/profile.d/zivpn-autostart.sh
 
-echo "[10/10] Install AUTO DELETE expired (DATE + TIME - FIXED)"
-cat > /usr/bin/zivpn-expire.sh << 'EOF'
+echo "[10/10] Install AUTO DELETE expired (DATE + TIME - FINAL)"
+
+# ===== CREATE EXPIRE SCRIPT =====
+cat > /usr/local/bin/zivpn-expire.sh << 'EOF'
 #!/bin/bash
 
-# ===== FIX PATH UNTUK CRON =====
+# ===== CRON SAFE ENV =====
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export TZ=Asia/Jakarta
+export LANG=C
 
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
+LOG="/var/log/zivpn-expire.log"
 
 NOW_TS=$(date +%s)
 
@@ -135,17 +140,18 @@ while IFS='|' read -r USER PASS EXP LIMIT; do
     EXP="$EXP 23:59"
   fi
 
-  EXP_TS=$(date -d "$EXP" +%s 2>/dev/null)
+  EXP_TS=$(date -d "$EXP" +%s 2>>"$LOG")
 
-  # jika gagal parse → simpan (aman)
+  # gagal parse → simpan
   if [[ -z "$EXP_TS" ]]; then
     echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
     continue
   fi
 
-  # expired → hapus
   if (( EXP_TS <= NOW_TS )); then
-    jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+    jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" \
+      > /tmp/z.json && mv /tmp/z.json "$CONFIG"
+    echo "[EXPIRED] $USER $EXP" >> "$LOG"
   else
     echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
   fi
@@ -153,23 +159,35 @@ while IFS='|' read -r USER PASS EXP LIMIT; do
 done < "$DB"
 
 mv "$TMP" "$DB"
-systemctl restart zivpn
+
+/bin/systemctl restart zivpn
 EOF
 
-echo "[FIX] Install & enable cron service"
+# ===== PERMISSION =====
+chmod 755 /usr/local/bin/zivpn-expire.sh
+chown root:root /usr/local/bin/zivpn-expire.sh
 
+# ===== LOG FILE =====
+touch /var/log/zivpn-expire.log
+chmod 644 /var/log/zivpn-expire.log
+
+# ===== INSTALL CRON =====
 apt-get install -y cron
-
 systemctl enable cron
 systemctl restart cron
 
-echo "[FIX] Register cron job for auto delete"
+# ===== CLEAN OLD CRON (IMPORTANT) =====
+crontab -l 2>/dev/null | grep -v zivpn-expire | crontab - || true
+rm -f /etc/cron.d/zivpn-expire
 
-# hapus duplikat cron lama (kalau ada)
-crontab -l 2>/dev/null | grep -v zivpn-expire.sh | crontab -
+# ===== REGISTER ROOT CRON (TRIAL SETIAP 2 MENIT) =====
+cat > /etc/cron.d/zivpn-expire << 'EOF'
+*/2 * * * * root /bin/bash /usr/local/bin/zivpn-expire.sh
+EOF
 
-# pasang cron baru
-(crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
+chmod 644 /etc/cron.d/zivpn-expire
+systemctl restart cron
+
 
 
 timedatectl set-timezone Asia/Jakarta
