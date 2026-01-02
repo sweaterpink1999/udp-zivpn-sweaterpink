@@ -111,39 +111,46 @@ fi
 EOF
 chmod +x /etc/profile.d/zivpn-autostart.sh
 
-echo "[10/10] Install AUTO DELETE expired (DATE + TIME)"
+echo "[10/10] Install AUTO DELETE expired (DATE + TIME - FIXED)"
+
 cat > /usr/bin/zivpn-expire.sh << 'EOF'
 #!/bin/bash
+
+# FIX PATH UNTUK CRON (WAJIB)
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 CONFIG="/etc/zivpn/config.json"
 DB="/etc/zivpn/users.db"
+
 NOW=$(date +"%Y-%m-%d %H:%M")
 
 [ ! -f "$DB" ] && exit 0
+
 TMP="/tmp/zivpn-clean.db"
 > "$TMP"
 
 while IFS='|' read -r USER PASS EXP LIMIT; do
-  if [[ "$EXP" < "$NOW" ]]; then
+
+  # jika format tanpa jam (harian), set 23:59
+  if [[ "$EXP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    EXP="$EXP 23:59"
+  fi
+
+  EXP_TS=$(date -d "$EXP" +%s 2>/dev/null)
+  NOW_TS=$(date -d "$NOW" +%s)
+
+  # jika gagal parse tanggal → simpan (aman)
+  if [[ -z "$EXP_TS" ]]; then
+    echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
+    continue
+  fi
+
+  if (( EXP_TS <= NOW_TS )); then
     jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
   else
     echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
   fi
-done < "$DB"
 
-mv "$TMP" "$DB"
-systemctl restart zivpn
-EOF
-
-[ ! -f "$DB" ] && exit 0
-TMP="/tmp/zivpn-clean.db"
-> "$TMP"
-
-while IFS='|' read -r USER PASS EXP LIMIT; do
-  if [[ "$EXP" < "$NOW" ]]; then
-    jq --arg pass "$PASS" '.auth.config -= [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
-  else
-    echo "$USER|$PASS|$EXP|$LIMIT" >> "$TMP"
-  fi
 done < "$DB"
 
 mv "$TMP" "$DB"
@@ -151,6 +158,7 @@ systemctl restart zivpn
 EOF
 
 chmod +x /usr/bin/zivpn-expire.sh
+
 (crontab -l 2>/dev/null; echo "* * * * * /usr/bin/zivpn-expire.sh >/dev/null 2>&1") | crontab -
 
 echo
