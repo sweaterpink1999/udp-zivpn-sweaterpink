@@ -110,24 +110,25 @@ systemctl restart zivpn
 # ===== TELEGRAM NOTIFICATION =====
 send_telegram "📢 *ZIVPN ACCOUNT CREATED*
 ────────────────────
-🌐 Domain   : $DOMAIN
-👤 Username : $USER
-🔐 Password : $PASS
-⏳ Expired  : $EXP
-📱 IP Limit : $LIMIT
+🌐 Domain        : $DOMAIN
+👤 Username      : $USER
+🔐 Password      : $PASS
+⏳ Expired       : $EXP
+📆 Aktif Selama  : $DAYS Hari
+📱 IP Limit      : $LIMIT
 ────────────────────
-✅ Type     : HARIAN"
+✅ Type          : HARIAN"
 
 clear
 echo -e "${GREEN}ACCOUNT CREATED${NC}"
-echo " Domain   : $DOMAIN"
-echo " Username : $USER"
-echo " Password : $PASS"
-echo " Expired  : $EXP"
-echo " IP Limit : $LIMIT"
+echo " Domain        : $DOMAIN"
+echo " Username      : $USER"
+echo " Password      : $PASS"
+echo " Expired       : $EXP"
+echo " Aktif Selama  : $DAYS Hari"
+echo " IP Limit      : $LIMIT"
 read -p "Press Enter..."
 }
-
 
 create_trial() {
 read -rp " Trial duration (minutes): " MIN
