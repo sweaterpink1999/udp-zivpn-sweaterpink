@@ -107,6 +107,17 @@ jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /t
 echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
 
+# ===== TELEGRAM NOTIFICATION =====
+send_telegram "📢 *ZIVPN ACCOUNT CREATED*
+────────────────────
+🌐 Domain   : $DOMAIN
+👤 Username : $USER
+🔐 Password : $PASS
+⏳ Expired  : $EXP
+📱 IP Limit : $LIMIT
+────────────────────
+✅ Type     : HARIAN"
+
 clear
 echo -e "${GREEN}ACCOUNT CREATED${NC}"
 echo " Domain   : $DOMAIN"
@@ -117,7 +128,7 @@ echo " IP Limit : $LIMIT"
 read -p "Press Enter..."
 }
 
-# ===== MENU 10: TRIAL PER MENIT =====
+
 create_trial() {
 read -rp " Trial duration (minutes): " MIN
 [[ -z "$MIN" || "$MIN" -le 0 ]] && return
@@ -130,6 +141,17 @@ LIMIT=1
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
 echo "$USER|$PASS|$EXP|$LIMIT" >> "$DB"
 systemctl restart zivpn
+
+# ===== TELEGRAM NOTIFICATION =====
+send_telegram "⏱ *ZIVPN TRIAL ACCOUNT*
+────────────────────
+🌐 Domain   : $DOMAIN
+👤 Username : $USER
+🔐 Password : $PASS
+⏳ Expired  : $EXP
+📱 IP Limit : 1
+────────────────────
+⚡ Type     : TRIAL (${MIN} Minutes)"
 
 clear
 echo -e "${GREEN}TRIAL CREATED${NC}"
