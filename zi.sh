@@ -61,6 +61,22 @@ echo "[5/10] Enable IP Forward (PERMANENT)"
 echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-zivpn.conf
 sysctl -p /etc/sysctl.d/99-zivpn.conf
 
+echo "[UDP] Optimizing kernel for UDP stability"
+
+cat << EOF > /etc/sysctl.d/99-zivpn-udp.conf
+net.core.rmem_max=26214400
+net.core.wmem_max=26214400
+net.core.rmem_default=26214400
+net.core.wmem_default=26214400
+net.ipv4.udp_rmem_min=8192
+net.ipv4.udp_wmem_min=8192
+net.ipv4.udp_mem=65536 131072 262144
+net.netfilter.nf_conntrack_udp_timeout=120
+net.netfilter.nf_conntrack_udp_timeout_stream=180
+EOF
+
+sysctl --system
+
 echo "[6/10] Install systemd service"
 cat > /etc/systemd/system/zivpn.service << EOF
 [Unit]
@@ -83,7 +99,7 @@ systemctl restart zivpn
 echo "[7/10] Setup firewall & NAT (SSH SAFE)"
 IFACE=$(ip -4 route | awk '/default/ {print $5}' | head -1)
 
-iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+iptables -t nat -A PREROUTING -i $IFACE -p udp --dport 6000:6100 -j DNAT --to-destination :5667
 iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
 iptables -A FORWARD -p udp --dport 5667 -j ACCEPT
 iptables -A FORWARD -p udp --sport 5667 -j ACCEPT
