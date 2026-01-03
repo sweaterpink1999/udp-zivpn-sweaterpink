@@ -127,7 +127,7 @@ read -rp " IP Limit (1/2/3, 0=unlimit) : " LIMIT
 [ "$LIMIT" = "0" ] && LIMIT="∞"
 
 PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-EXP=$(date -d "$DAYS days" +"%Y-%m-%d")
+EXP=$(date -d "$DAYS days +1 day" +"%Y-%m-%d 00:00")
 
 # simpan ke config & DB
 jq --arg pass "$PASS" '.auth.config += [$pass]' "$CONFIG" > /tmp/z.json && mv /tmp/z.json "$CONFIG"
@@ -250,7 +250,7 @@ IFS='|' read -r U P E L <<< "$LINE"
 
 # jika expired pakai jam, buang jam
 BASE_DATE=$(echo "$E" | cut -d' ' -f1)
-NEWEXP=$(date -d "$BASE_DATE +$DAYS days" +"%Y-%m-%d")
+NEWEXP=$(date -d "$BASE_DATE +$DAYS days +1 day" +"%Y-%m-%d 00:00")
 
 sed -i "${NUM}c\\$U|$P|$NEWEXP|$L" "$DB"
 systemctl restart zivpn
